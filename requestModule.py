@@ -1,5 +1,7 @@
 import json
 import requests
+import os
+import time
 
 """Module containing low-level request handlers for the ankiConnect HTTP server"""
 
@@ -11,15 +13,28 @@ link = localhost + ":" + PORT
 def check_connection(url=link):
     """Low level function to check connection to ankiConnect server"""
 
+    # adds a check to the environment variable AnkiConnection to see if the connection has been checked in the last ten
+    # seconds. If it is, assume it is still open and return True without further checks. This is done to avoid calling
+    # the function 100 times in a matter of seconds when uploading a large amount of cards.
+    if time.time() - float(os.environ.get("AnkiConnection", "0")) < 10:
+        return True
+
     try:
+        # checks connection to the http server by making a get request and checking its return value against the
+        # hardcoded one
         r = requests.get(url=url)
         check_string = "AnkiConnect v.6"
+
         if r.text == check_string:
+            os.environ["AnkiConnection"] = str(time.time())
             return True
         else:
+            os.environ["AnkiConnection"] = "0"
             raise Exception(f"Connection to ankiConnect unsuccessful. Expected response: {check_string}.n"
                             f"Actual response: {r.text}")
+
     except Exception as er:
+        os.environ["AnkiConnection"] = "0"
         print("The connection was refused from the server. Check that Anki is open and AnkiConnect is installed.")
         print(f"Exception: {er}")
         return False
