@@ -24,7 +24,7 @@ def model_exists(model_name):
 
 
 def check_model_fields(model_name, model_fields):
-    """Low-level function to check that all the fields provided have a corresponding field in the modelName definition"""
+    """Low-level function to check that all the fields provided are in the modelName definition"""
 
     actual_fields = model_list[model_name]
     actual_fields.sort()
@@ -34,5 +34,6 @@ def check_model_fields(model_name, model_fields):
 
 # define a dictionary containing all the models available for the current user
 model_list = {}
-for name in get_model_names():
-    model_list.setdefault(name, get_model_fields(name))
+if requestModule.check_connection():
+    for name in get_model_names():
+        model_list.setdefault(name, get_model_fields(name))
