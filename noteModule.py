@@ -141,6 +141,9 @@ class NoteSet:
             # save the id alongside the note
             parseModule.insert_card_id(self.file_lines, self.notes_last_lines[i], result[i])
 
+        # change deck to already existing notes from a different deck
+        self.bulk_change_deck()
+
         # update already existing notes (no bulk method implemented in ankiConnect yet)
         for note in self.updatableNotes:
             note.update()
@@ -161,13 +164,56 @@ class NoteSet:
 
     @property
     def updatableNotes(self) -> list[Note]:
+        """Property that returns a list of all the notes that need to be updated. Runs a notesInfo query on the http
+        server and compares each note from existingNots with the queried notes"""
+
+        # gathers all ids of the existing notes
         ids = [note.id for note in self.existingNotes]
+
+        # queries the database to get a list of dictionary, where each dict represents a note
         queried_notes = requestModule.request_action("notesInfo", notes=ids)["result"]
         for dic in queried_notes:
             dic.setdefault("deckName", self.deckName)
+
+        # creates the Note objects from the databases
         queried_notes = [Note.create_from_dict(obj) for obj in queried_notes]
+
+        # compares the already existing notes with the ones created from the query and compares them, adding the ones
+        # that differ to the list
         upNotes = [note for note, qnote in zip(self.existingNotes, queried_notes) if note != qnote]
+
+        # returns the list of notes that need to be updated
         return upNotes
+
+    @property
+    def wrongDeckNotes(self) -> list[int]:
+        """Property that returns a list of the ids of the notes that need to change deck.
+        Runs a getDecks query on the http server and returns ids of all the notes in decks different from the one
+        defined in the noteSet deckName attribute"""
+
+        # gathers all ids of the existing notes
+        ids = [note.id for note in self.existingNotes]
+
+        # queries the database to get a dictionary: {deck: [note ids]}
+        decks_dict = requestModule.request_action("getDecks", cards=ids)["result"]
+
+        # instantiates an empty list
+        wrongDeck  = []
+
+        # for every key in the dictionary that is different from the one defined in the noteSet deckName attribute,
+        # add the items of its list to the wrongDeck list
+        for key in list(decks_dict):
+            if key != self.deckName:
+                wrongDeck.extend(decks_dict[key])
+
+        # return the list of the ids of the notes that need to change deck
+        return wrongDeck
+
+    def bulk_change_deck(self) -> None:
+        """Method to change deck to all the notes that need to do so."""
+        requestModule.request_action("changeDeck", cards=self.wrongDeckNotes, deck=self.deckName)
+
+
 
     # MANUAL METHODS ===================================================================================================
     # def _add_note(self, note: Note) -> None:
