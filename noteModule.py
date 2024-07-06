@@ -55,9 +55,18 @@ class Note:
     def create_from_dict(cls, note_dict: dict):
         dn = note_dict["deckName"]
         mn = note_dict.get("modelName", "Basic")
-        f = {"Front": note_dict["Front"], "Back": note_dict["Back"]}
         tags = note_dict["tags"]
-        id = note_dict["id"]
+
+        if "Front" in note_dict:
+            f = {"Front": note_dict["Front"], "Back": note_dict["Back"]}
+        else:
+            f = {"Front": note_dict["fields"]["Front"]["value"],
+                 "Back": note_dict["fields"]["Back"]["value"]}
+
+        if "id" in note_dict:
+            id = note_dict["id"]
+        else:
+            id = note_dict["noteId"]
 
         return cls(dn, mn, f, tags, id)
 
@@ -117,7 +126,8 @@ class NoteSet:
         # if some notes could not be added, retrieve the error messages and insert the errors in the result list
         if None in result:
             print("Some notes could not be added to the collection.")
-            errors = requestModule.request_action("canAddNotesWithErrorDetail", notes=[asdict(note) for note in self.newNotes])["result"]
+            notes = [asdict(note) for note in self.newNotes]
+            errors = requestModule.request_action("canAddNotesWithErrorDetail", notes=notes)["result"]
             for i in range(len(result)):
                 if result[i] is None:
                     result[i] = errors[i]["error"]
@@ -132,7 +142,7 @@ class NoteSet:
             parseModule.insert_card_id(self.file_lines, self.notes_last_lines[i], result[i])
 
         # update already existing notes (no bulk method implemented in ankiConnect yet)
-        for note in self.existingNotes:
+        for note in self.updatableNotes:
             note.update()
 
         # sort the notes
@@ -145,8 +155,19 @@ class NoteSet:
             f.writelines(self.file_lines)
 
     def sort_notes(self):
+        """Method to divide already existing notes from new notes"""
         self.existingNotes = [note for note in self.allNotes if note.id is not None]
         self.newNotes = [note for note in self.allNotes if note.id is None]
+
+    @property
+    def updatableNotes(self) -> list[Note]:
+        ids = [note.id for note in self.existingNotes]
+        queried_notes = requestModule.request_action("notesInfo", notes=ids)["result"]
+        for dic in queried_notes:
+            dic.setdefault("deckName", self.deckName)
+        queried_notes = [Note.create_from_dict(obj) for obj in queried_notes]
+        upNotes = [note for note, qnote in zip(self.existingNotes, queried_notes) if note != qnote]
+        return upNotes
 
     # MANUAL METHODS ===================================================================================================
     # def _add_note(self, note: Note) -> None:
