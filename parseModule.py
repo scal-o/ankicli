@@ -1,5 +1,6 @@
 import re
 import copy
+import os
 """Module to handle parsing of text files"""
 
 # define a list of options used to compile the regular expressions throughout the module
@@ -10,7 +11,10 @@ precompiled = {
     "question": r"^>\[!question]-?\s*(.+)(#card)",
     "answer": r"^>",
     "id": r"<!--ID: (\d+)-->|\^(\d+)",
-    "empty_line": r"(\s+)?\n"
+    "empty_line": r"(\s+)?\n",
+    "image": r"!\[\[([\w\s\.]+)\]\]",
+    "math": r"\$([^\s][^\$]+)\$",
+    "math_block": r"\${2}([^\$]+)\${2}"
 }
 
 id_format = "^{}\n"
@@ -38,7 +42,7 @@ def get_properties(lines: list) -> list:
     return properties
 
 
-def get_deck(properties, deck_re="cards-deck") -> str:
+def get_deck(properties) -> str:
 
     # compile the regex expression before using it
     deck_re = re.compile(precompiled["deck"])
@@ -51,8 +55,6 @@ def get_deck(properties, deck_re="cards-deck") -> str:
         return None
     else:
         return deck[0]
-
-    return deck
 
 
 def get_tags(properties) -> list:
@@ -74,12 +76,29 @@ def card_gen(lines, deck=None, tags=None):
     answer_re = re.compile(precompiled["answer"])
     id_re = re.compile(precompiled["id"])
     empty_line_re = re.compile(precompiled["empty_line"])
+    image_re = re.compile(precompiled["image"])
+    math_re = re.compile(precompiled["math"])
+    math_block_re = re.compile(precompiled["math_block"])
 
     # create a standard dictionary to use as a template
-    std_dict = {"Front": None, "Back": None, "id": None, "deckName": deck, "tags": tags}
+    std_dict = {"Front": None, "Back": None, "id": None, "deckName": deck, "tags": tags, "picture": None}
     card_dict = copy.deepcopy(std_dict)
 
     for i, line in enumerate(lines):
+
+        for im in image_re.findall(line):
+            if card_dict["picture"] is None:
+                card_dict["picture"] = [{"filename": im, "path": os.path.join(os.getcwd(), im), "fields": []}]
+            else:
+                card_dict["picture"].append({"filename": im, "path": os.path.join(os.getcwd(), im), "fields": []})
+            line = line.replace("![[", "<img src=\"", 1).replace("]]", "\">", 1)
+
+        for expr in math_block_re.findall(line):
+            line = math_block_re.sub(f"<anki-mathjax block=true>{expr}</anki-mathjax>", line)
+
+        for expr in math_re.findall(line):
+            line = math_re.sub(f"<anki-mathjax>{expr}</anki-mathjax>", line)
+
         if question_re.search(line) is not None:
             card_dict["Front"] = question_re.search(line).group(1)
         elif answer_re.search(line) is not None:
@@ -133,3 +152,13 @@ def insert_card_id(lines, index, id) -> None:
 
     id_line = id_format.format(id)
     lines.insert(index, id_line)
+
+
+def sub_card_id(lines: list, old_id: int, new_id: int) -> None:
+    """Function to change card id for a card that doesn't exist anymore and is being recreated."""
+
+    for line in lines:
+        if re.search(f"{old_id}", line):
+            id_line = id_format.format(old_id)
+            i = lines.index(id_line)
+            lines[i] = id_format.format(new_id)
