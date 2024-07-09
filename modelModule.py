@@ -37,3 +37,5 @@ model_list = {}
 if requestModule.check_connection():
     for name in get_model_names():
         model_list.setdefault(name, get_model_fields(name))
+else:
+    raise ConnectionError("Could not connect to anki.")
