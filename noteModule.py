@@ -1,8 +1,9 @@
+import copy
 import requestModule
 import modelModule
 import deckModule
 import parseModule
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 """Module to handle note-related requests, like deck creation, deletion, etc"""
 
 
@@ -14,7 +15,7 @@ class Note:
     fields: dict = field(default_factory=dict)
     tags: list[str] = field(default_factory=list)
     id: int = field(default=None)
-    picture: list[dict] = field(default=None)
+    inline: bool = field(default=False)
 
     def __post_init__(self):
         if not modelModule.model_exists(self.modelName):
@@ -41,7 +42,7 @@ class Note:
         if not deckModule.deck_exists(self.deckName):
             deckModule.create_deck(self.deckName)
 
-        result = requestModule.request_action("addNote", note=asdict(self))["result"]
+        result = requestModule.request_action("addNote", note=self.to_dict())["result"]
         self.id = result
 
     @requestModule.ensure_connectivity
@@ -50,14 +51,27 @@ class Note:
         if self.get_deck() != self.deckName:
             self.change_deck()
 
-        requestModule.request_action("updateNote", note=asdict(self))
+        requestModule.request_action("updateNote", note=self.to_dict())
+
+    def to_dict(self) -> dict:
+        """Alternative to dataclasses.asdict (doesn't include inline field)."""
+
+        d = {
+            "deckName": self.deckName,
+            "modelName": self.modelName,
+            "fields": copy.deepcopy(self.fields),
+            "tags": copy.deepcopy(self.tags),
+            "id": self.id
+        }
+
+        return d
 
     @classmethod
     def create_from_dict(cls, note_dict: dict):
         dn = note_dict["deckName"]
         mn = note_dict.get("modelName", "Basic")
         tags = note_dict["tags"]
-        picture = note_dict.get("picture")
+        inline = note_dict.get("inline", False)
 
         if "Front" in note_dict:
             f = {"Front": note_dict["Front"], "Back": note_dict["Back"]}
@@ -70,7 +84,7 @@ class Note:
         else:
             id = note_dict["noteId"]
 
-        return cls(dn, mn, f, tags, id, picture)
+        return cls(dn, mn, f, tags, id, inline)
 
 
 @dataclass
@@ -84,6 +98,7 @@ class NoteSet:
     updatableNotes: list[Note] = field(default_factory=list)
     deletedNotes: list[Note] = field(default_factory=list)
     wrongDeckNotes: list[Note] = field(default_factory=list)
+    errorNotes: list[Note] = field(default_factory=list)
     notes_last_lines: list[int] = field(default_factory=list)
     file_lines: list[str] = field(default_factory=list)
 
@@ -127,15 +142,21 @@ class NoteSet:
         # # add new notes ==============================================================================================
         # add notes in bulk and return note ids and errors
         result = self.add_notes_return_errors_and_ids(self.newNotes)
-
+        inline_counter = -1
         # save the ids or errors of the notes to the file
         for i in range(0, len(self.newNotes)):
             self.newNotes[i].id = result[i]
+
+            # update inline counter if the note is inline
+            inline = self.newNotes[i].inline
+            if inline:
+                inline_counter += 1
+
             # move the last line of the current note down for as many lines as the note number to account for the newly
             # added line (as each newly created card adds a single line for its id)
-            self.notes_last_lines[i] += i
+            self.notes_last_lines[i] += i - inline_counter
             # save the id alongside the note
-            parseModule.insert_card_id(self.file_lines, self.notes_last_lines[i], result[i])
+            parseModule.insert_card_id(self.file_lines, self.notes_last_lines[i], result[i], inline)
 
         # # existing notes =============================================================================================
         # change deck to already existing notes from a different deck
@@ -184,7 +205,24 @@ class NoteSet:
          Works by running a notesInfo/getDecks query on the http server and comparing each note from existingNotes with
          the queried notes."""
 
-        # # update updatableNotes and deletedNotes ====================================================================
+        # # update errorNotes ==========================================================================================
+
+        # puts the notes with errors in their ids in a separate list
+        indexes = []
+        for i, note in enumerate(self.existingNotes):
+            if not isinstance(note.id, int):
+                self.errorNotes.append(note)
+                indexes.append(i)
+
+        for i in reversed(indexes):
+            self.existingNotes.pop(i)
+
+        # print a warning message if the errorNotes list is not empty
+        if len(self.errorNotes) != 0:
+            print("Some notes were not read properly, or returned an error while being added to the deck.")
+            print(self.errorNotes)
+
+        # # update updatableNotes and deletedNotes =====================================================================
         # resets the notes lists
         self.updatableNotes = []
         self.deletedNotes = []
@@ -215,10 +253,16 @@ class NoteSet:
             elif note != qnote:
                 self.updatableNotes.append(note)
 
-        for i in indexes:
+        for i in reversed(indexes):
             self.existingNotes.pop(i)
             queried_notes.pop(i)
             ids.pop(i)  # remove id from ids to reuse same list later
+
+        # print a warning message if the deletedNotes list is not empty
+        if len(self.deletedNotes) != 0:
+            print("Some notes could not be found in the current deck. "
+                  "They have been added again and their ids have been updated.")
+            print(self.deletedNotes)
 
         # # update wrongDeckNotes ======================================================================================
         # resets note list
@@ -233,6 +277,11 @@ class NoteSet:
             if key != self.deckName:
                 self.wrongDeckNotes.extend(decks_dict[key])
 
+        # print a warning message if the wrongDeckNotes list is not empty
+        if len(self.wrongDeckNotes) != 0:
+            print("Some notes were found in a different deck. They have been moved to the current deck.")
+            print(self.wrongDeckNotes)
+
     @requestModule.ensure_connectivity
     def bulk_change_deck(self) -> None:
         """Method to change deck to all the notes that need to do so."""
@@ -243,13 +292,13 @@ class NoteSet:
         """Method to request note addition and return new notes ids and errors when present"""
 
         # add notes in bulk
-        result = requestModule.request_action("addNotes", notes=[asdict(note) for note in note_list])["result"]
+        result = requestModule.request_action("addNotes", notes=[note.to_dict() for note in note_list])["result"]
 
         # check that all the notes could be created successfully
         # if some notes could not be added, retrieve the error messages and insert the errors in the result list
         if None in result:
             print("Some notes could not be added to the collection.")
-            notes = [asdict(note) for note in note_list]
+            notes = [note.to_dict() for note in note_list]
             errors = requestModule.request_action("canAddNotesWithErrorDetail", notes=notes)["result"]
             for i in range(len(result)):
                 if result[i] is None:

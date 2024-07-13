@@ -14,10 +14,13 @@ precompiled = {
     "empty_line": r"(\s+)?\n",
     "image": r"!\[\[([\w\s\.]+)\]\]",
     "math": r"\$([^\s][^\$]+)\$",
-    "math_block": r"\${2}([^\$]+)\${2}"
+    "math_block": r"\${2}([^\$]+)\${2}",
+    "inline_card": r"-?(.+)::([^\^]+)\^?(\d+)?",
+    "inline_reverse_card": r"-?(.+):::([^\^]+)\^?(\d+)?"
 }
 
 id_format = "^{}\n"
+inline_id_format = "{} ^{}\n"
 
 
 def get_lines(path):
@@ -68,6 +71,44 @@ def get_tags(properties) -> list:
     return tags
 
 
+def format_images(lines: list) -> tuple:
+    """Function to format lines containing images, wrapping their references in HTML syntax.
+    Returns a list of the formatted lines and a list of dictionaries containing the image information."""
+
+    # compile the regex expression
+    image_re = re.compile(precompiled["image"])
+
+    # initialize lists
+    images = []
+    formatted_lines = []
+
+    # format lines and append images filenames and paths to the images list
+    for line in lines:
+        for im in image_re.findall(line):
+            images.append({"filename": im, "path": os.path.join(os.getcwd(), im)})
+            line = line.replace("![[", "<img src=\"", 1).replace("]]", "\">", 1)
+        formatted_lines.append(line)
+
+    return formatted_lines, images
+
+
+def format_math(lines: list) -> list:
+    """Function to format lines containing math expressions, wrapping them in anki-mathjax HTML syntax."""
+
+    # compile the regex expressions
+    math_re = re.compile(precompiled["math"])
+    math_block_re = re.compile(precompiled["math_block"])
+
+    # format lines
+    for line in lines:
+
+        for expr in math_block_re.findall(line):
+            line = math_block_re.sub(f"<anki-mathjax block=true>{expr}</anki-mathjax>", line)
+
+        for expr in math_re.findall(line):
+            line = math_re.sub(f"<anki-mathjax>{expr}</anki-mathjax>", line)
+
+
 def card_gen(lines, deck=None, tags=None):
     """Creates a generator object to iterate through the file lines and retrieve cards one by one, allowing the caller
     to modify the underlying lines list (for example by inserting the card id after uploading it)"""
@@ -76,82 +117,55 @@ def card_gen(lines, deck=None, tags=None):
     answer_re = re.compile(precompiled["answer"])
     id_re = re.compile(precompiled["id"])
     empty_line_re = re.compile(precompiled["empty_line"])
-    image_re = re.compile(precompiled["image"])
-    math_re = re.compile(precompiled["math"])
-    math_block_re = re.compile(precompiled["math_block"])
+    inline_re = re.compile(precompiled["inline_card"])
+    inline_reverse_re = re.compile(precompiled["inline_reverse_card"])
 
     # create a standard dictionary to use as a template
-    std_dict = {"Front": None, "Back": None, "id": None, "deckName": deck, "tags": tags, "picture": None}
+    std_dict = {"Front": None, "Back": None, "id": None, "deckName": deck, "tags": tags}
     card_dict = copy.deepcopy(std_dict)
 
     for i, line in enumerate(lines):
 
-        for im in image_re.findall(line):
-            if card_dict["picture"] is None:
-                card_dict["picture"] = [{"filename": im, "path": os.path.join(os.getcwd(), im), "fields": []}]
-            else:
-                card_dict["picture"].append({"filename": im, "path": os.path.join(os.getcwd(), im), "fields": []})
-            line = line.replace("![[", "<img src=\"", 1).replace("]]", "\">", 1)
+        # inline card parser
+        if (r := inline_reverse_re.search(line)) is not None:
+            card_dict["modelName"] = "Basic (and reversed card)"
+        else:
+            r = inline_re.search(line)
 
-        for expr in math_block_re.findall(line):
-            line = math_block_re.sub(f"<anki-mathjax block=true>{expr}</anki-mathjax>", line)
+        if r is not None:
+            card_dict["Front"] = r.group(1).strip()
+            card_dict["Back"] = r.group(2).strip()
+            card_dict["id"] = int(r.group(3)) if r.group(3) is not None else None
+            card_dict["inline"] = True
+            yield card_dict, i
+            card_dict = copy.deepcopy(std_dict)
 
-        for expr in math_re.findall(line):
-            line = math_re.sub(f"<anki-mathjax>{expr}</anki-mathjax>", line)
-
-        if question_re.search(line) is not None:
-            card_dict["Front"] = question_re.search(line).group(1)
+        # normal card parser
+        if (r := question_re.search(line)) is not None:
+            card_dict["Front"] = r.group(1)
         elif answer_re.search(line) is not None:
             if card_dict["Back"] is None:
                 card_dict["Back"] = line.strip(">")
             else:
                 card_dict["Back"] += line.strip(">")
-        elif id_re.search(line) is not None:
-            card_dict["id"] = [int(group) for group in id_re.search(line).groups() if group is not None][0]
+        elif (r := id_re.search(line)) is not None:
+            card_dict["id"] = [int(group) for group in r.groups() if group is not None][0]
         elif empty_line_re.search(line) is not None:
             if card_dict["Front"] is not None and card_dict["Back"] is not None:
                 card_dict["Back"] = card_dict["Back"].replace("\n", "<br />")
-                yield card_dict, i
+                yield card_dict, i-1
                 card_dict = copy.deepcopy(std_dict)
 
 
-def get_cards(lines, deck=None, tags=None) -> list[dict]:
-    """Function to parse the whole file and return a list of dictionary where each dict represent a card"""
-
-    question_re = re.compile(precompiled["question"])
-    answer_re = re.compile(precompiled["answer"])
-    id_re = re.compile(precompiled["id"])
-    empty_line_re = re.compile(precompiled["empty_line"])
-
-    # create an empty list and a standard dictionary to use as a template
-    card_list = []
-    std_dict = {"Front": None, "Back": None, "id": None, "deckName": deck, "tags": tags}
-    card_dict = copy.deepcopy(std_dict)
-
-    for line in lines:
-        if question_re.search(line) is not None:
-            card_dict["Front"] = question_re.search(line).group(1)
-        elif answer_re.search(line) is not None:
-            if card_dict["Back"] is None:
-                card_dict["Back"] = line.strip(">")
-            else:
-                card_dict["Back"] += line.strip(">")
-        elif id_re.search(line) is not None:
-            card_dict["id"] = [group for group in id_re.search(line).groups() if group is not None][0]
-        elif empty_line_re.search(line) is not None:
-            if card_dict["Front"] is not None and card_dict["Back"] is not None:
-                card_dict["Back"] = card_dict["Back"].replace("\n", "<br />")
-                card_list.append(card_dict)
-                card_dict = copy.deepcopy(std_dict)
-
-    return card_list
-
-
-def insert_card_id(lines, index, id) -> None:
+def insert_card_id(lines, index, id, inline=False) -> None:
     """Function to insert the card id in the lines of the file. Simple wrapper around .insert"""
 
-    id_line = id_format.format(id)
-    lines.insert(index, id_line)
+    if inline:
+        id_line = inline_id_format.format(lines[index].strip(), id)
+        lines[index] = id_line
+    else:
+        id_line = id_format.format(id)
+        lines.insert(index, id_line)
 
 
 def sub_card_id(lines: list, old_id: int, new_id: int) -> None:
