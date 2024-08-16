@@ -116,7 +116,10 @@ class NoteSet:
     notes_last_lines: list[int] = field(default_factory=list)
     new_notes_last_lines: list[int] = field(default_factory=list)
     file_lines: list[str] = field(default_factory=list)
+    file_properties: list[str] = field(default_factory=list)
+    file_text: list[str] = field(default_factory=list)
     file_name: str = field(default=None)
+    images: list[dict] = field(default_factory=list)
 
     # AUTOMATIC METHODS ================================================================================================
 
@@ -130,14 +133,22 @@ class NoteSet:
 
         # retrieve properties and lines from the file
         nset.file_lines = parseModule.get_lines(file)
-        properties = parseModule.get_properties(nset.file_lines)
+        properties, properties_indexes = parseModule.get_properties(nset.file_lines)
 
         # assign deck and tags to the correct attributes
         nset.deckName = parseModule.get_deck(properties)
         nset.commonTags = parseModule.get_tags(properties)
 
+        # separate file properties and text using the properties indexes
+        nset.file_properties = nset.file_lines[properties_indexes[0]:properties_indexes[1]]
+        nset.file_text = nset.file_lines[properties_indexes[1]:]
+
+        # format images and math expressions
+        nset.file_text = parseModule.format_math(nset.file_text)
+        nset.file_text, nset.images = parseModule.format_images(nset.file_text)
+
         # iterate all the cards through the card generator
-        for card, index in parseModule.card_gen(nset.file_lines, nset.deckName, nset.commonTags):
+        for card, index in parseModule.card_gen(nset.file_text, nset.deckName, nset.commonTags):
             nset.allNotes.append(Note.create_from_dict(card))
             nset.notes_last_lines.append(index)
 
@@ -189,7 +200,7 @@ class NoteSet:
             # added line (as each newly created card adds a single line for its id)
             self.new_notes_last_lines[i] += i - inline_counter
             # save the id alongside the note
-            parseModule.insert_card_id(self.file_lines, self.new_notes_last_lines[i], notes_ids[i], note.inline)
+            parseModule.insert_card_id(self.file_text, self.new_notes_last_lines[i], notes_ids[i], note.inline)
 
     @requestModule.ensure_connectivity
     def update_existing_notes(self) -> None:
@@ -296,11 +307,23 @@ class NoteSet:
         duplicate_notes, error_notes = self.filter_duplicate_notes(error_notes)
         duplicate_ids = self.find_duplicate_ids(duplicate_notes)
 
+        # set inline counter to -1 to add ids to the right lines
+        inline_counter = -1
+
         # for every duplicate note, save its id in the Note obj and add it to the file lines
         for i, note in enumerate(duplicate_notes):
             note.id = duplicate_ids[i]
+
+            # update inline counter if the note is inline
+            inline_counter = inline_counter + 1 if note.inline else inline_counter
+
+            # move the last line of the current note down for as many lines as the duplicate note number to account for
+            # the newly added lines
             index = self.newNotes.index(note)
-            parseModule.insert_card_id(self.file_lines, self.new_notes_last_lines[index], note.id, note.inline)
+            self.new_notes_last_lines[index] += i - inline_counter
+
+            # save the id
+            parseModule.insert_card_id(self.file_text, self.new_notes_last_lines[index], note.id, note.inline)
 
         return error_notes
 
@@ -360,7 +383,7 @@ class NoteSet:
 
         # for every note (both duplicated and deleted) change the id in the file lines and then in the note obj
         for note_id, note in zip(note_ids, notes):
-            parseModule.sub_card_id(self.file_lines, note.id, note_id)
+            parseModule.sub_card_id(self.file_text, note.id, note_id)
             note.id = note_id
 
         return error_notes
@@ -381,7 +404,7 @@ class NoteSet:
         # add the items of its list to the wrongDeck list
         for key in list(decks_dict):
             if key != self.deckName:
-                wrong_deck_notes.extend(decks_dict[key])
+                wrong_deck_notes.extend([note for note in notes_to_check if note.id in decks_dict[key]])
 
         return wrong_deck_notes
 
@@ -423,6 +446,14 @@ class NoteSet:
 
         return updatable_notes
 
+    @requestModule.ensure_connectivity
+    def upload_media(self) -> None:
+        """Method to upload media to anki"""
+
+        # upload every image to the media folder
+        for im in self.images:
+            requestModule.request_action("storeMediaFile", filename=im["filename"], path=im["path"])
+
     def save_lines(self) -> None:
         """Method to save the updated lines to the file."""
 
@@ -430,6 +461,9 @@ class NoteSet:
         if not self.file_name:
             raise Exception("Method only available when the NoteSet object has been created from a file using the "
                             "NoteSet.create_from_file class method")
+
+        # update file lines
+        self.file_lines = self.file_properties + self.file_text
 
         # overwrite the file with the new lines
         # this should not be very dangerous as we're only inserting new lines and not deleting any, but might need some
