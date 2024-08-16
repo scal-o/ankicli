@@ -6,7 +6,7 @@ import os
 # define a list of options used to compile the regular expressions throughout the module
 precompiled = {
     "properties": "---",
-    "deck": r"cards-deck: ([\w:\s]+)",
+    "deck": r"cards-deck: ([\w:\-_\s]+)",
     "tags": r"^- ([\w/]+)",
     "question": r"^>\[!question]-?\s*(.+)(#card)",
     "answer": r"^>",
@@ -31,18 +31,19 @@ def get_lines(path):
     return lines
 
 
-def get_properties(lines: list) -> list:
+def get_properties(lines: list) -> tuple[list, list]:
     """Function that retrieves all the lines that make up the yaml properties frontmatter"""
 
     # compiles the regex expression before using it
     properties_re = re.compile(precompiled["properties"])
 
     # gets initial and final indices of the yaml frontmatter
-    properties = [i for i, j in enumerate(lines) if properties_re.search(j) is not None]
+    properties_indexes = [i for i, j in enumerate(lines) if properties_re.search(j) is not None]
+    properties_indexes[1] += 1
     # gets properties text from file lines
-    properties = [j.strip() for i, j in enumerate(lines) if i in range(properties[0], properties[1])]
+    properties = [j.strip() for i, j in enumerate(lines) if i in range(properties_indexes[0], properties_indexes[1])]
 
-    return properties
+    return properties, properties_indexes
 
 
 def get_deck(properties) -> str:
@@ -99,6 +100,9 @@ def format_math(lines: list) -> list:
     math_re = re.compile(precompiled["math"])
     math_block_re = re.compile(precompiled["math_block"])
 
+    # initialize list
+    formatted_lines = []
+
     # format lines
     for line in lines:
 
@@ -107,6 +111,10 @@ def format_math(lines: list) -> list:
 
         for expr in math_re.findall(line):
             line = math_re.sub(f"<anki-mathjax>{expr}</anki-mathjax>", line)
+
+        formatted_lines.append(line)
+
+    return formatted_lines
 
 
 def card_gen(lines, deck=None, tags=None):
@@ -155,6 +163,12 @@ def card_gen(lines, deck=None, tags=None):
                 card_dict["Back"] = card_dict["Back"].replace("\n", "<br />")
                 yield card_dict, i-1
                 card_dict = copy.deepcopy(std_dict)
+
+    # repeat check at end of file
+    if card_dict["Front"] is not None and card_dict["Back"] is not None:
+        card_dict["Back"] = card_dict["Back"].replace("\n", "<br />")
+        yield card_dict, i
+        card_dict = copy.deepcopy(std_dict)
 
 
 def insert_card_id(lines, index, id, inline=False) -> None:
