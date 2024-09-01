@@ -1,6 +1,9 @@
 import re
 import copy
 import os
+
+import pandas
+import pandas as pd
 """Module to handle parsing of text files"""
 
 # define a list of options used to compile the regular expressions throughout the module
@@ -9,9 +12,9 @@ precompiled = {
     "deck": r"cards-deck: ([\w:\-_\s]+)",
     "tags": r"^- ([\w/]+)",
     "question": r"^>\[!question]-?\s*(.+)(#card)",
-    "answer": r"^>",
+    "answer": r"^>(.*)(?<!\#card)$",
     "id": r"<!--ID: (\d+)-->|\^(\d+)",
-    "empty_line": r"(\s+)?\n",
+    "empty_line": r"^(\s+)?\n",
     "image": r"!\[\[([\w\s\.]+)\]\]",
     "math": r"\$([^\s][^\$]+)\$",
     "math_block": r"\${2}([^\$]+)\${2}",
@@ -115,6 +118,86 @@ def format_math(lines: list) -> list:
         formatted_lines.append(line)
 
     return formatted_lines
+
+
+def group_lines(lines: list) -> list[list]:
+    """Takes a single list as argument and returns a list of lists, each containing some lines that could contain card
+    information (or empty lines)."""
+    full_text = []
+    text = []
+
+    inline_re = re.compile(precompiled["inline_card"])
+    empty_line_re = re.compile(precompiled["empty_line"])
+
+    for line in lines:
+        if inline_re.search(line) or empty_line_re.search(line):
+            if len(text) != 0:
+                full_text.append(text)
+                text = list()
+
+            full_text.append([line])
+        else:
+            text.append(line)
+
+    if len(text) != 0:
+        full_text.append(text)
+
+    return full_text
+
+
+def parse_card(lines: list) -> pandas.Series:
+    """Returns a pandas.Series object corresponding to a single card. The Series object has the following fields
+    (indexes): front, back, id, inline, model."""
+
+    question_re = re.compile(precompiled["question"])
+    answer_re = re.compile(precompiled["answer"])
+    id_re = re.compile(precompiled["id"])
+    empty_line_re = re.compile(precompiled["empty_line"])
+    inline_re = re.compile(precompiled["inline_card"])
+    inline_reverse_re = re.compile(precompiled["inline_reverse_card"])
+
+    # create the base return values
+    front = None
+    back = None
+    id = None
+    inline = False
+    model = "Basic"
+
+    for line in lines:
+
+        # inline card parser
+        if (r := inline_reverse_re.search(line)) is not None:
+            model = "Basic (and reversed card)"
+        else:
+            r = inline_re.search(line)
+
+        if r is not None:
+            front = r.group(1).strip()
+            back = r.group(2).strip()
+            id = int(r.group(3)) if r.group(3) is not None else None
+            inline = True
+            return pd.Series([front, back, id, inline, model], index=["front", "back", "id", "inline", "model"])
+
+        # normal card parser
+        if (r := question_re.search(line)) is not None:
+            front = r.group(1)
+        elif answer_re.search(line) is not None:
+            if back is None:
+                back = line.strip(">")
+            else:
+                back += line.strip(">")
+        elif (r := id_re.search(line)) is not None:
+            id = [int(group) for group in r.groups() if group is not None][0]
+        elif empty_line_re.search(line) is not None:
+            if front is not None and back is not None:
+                back = back.replace("\n", "<br />")
+                return pd.Series([front, back, id, inline, model], index=["front", "back", "id", "inline", "model"])
+
+    # repeat check at end of file
+    if front is not None and back is not None:
+        back = back.replace("\n", "<br />")
+
+    return pd.Series([front, back, id, inline, model], index=["front", "back", "id", "inline", "model"])
 
 
 def card_gen(lines, deck=None, tags=None):
