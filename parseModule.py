@@ -34,6 +34,24 @@ def get_lines(path):
     return lines
 
 
+def extract_properties(lines: list) -> tuple[list, list]:
+    """Function that extracts the lines that make up the yaml frontmatter from the file lines.
+    Returns a list containing the properties lines and another one containing the other file lines."""
+
+    # compile the regex
+    properties_re = re.compile(precompiled["properties"])
+
+    # get yaml frontmatter indices
+    indexes = [i for i, j in enumerate(lines) if properties_re.search(j) is not None]
+    indexes[1] += 1
+
+    # extract properties from lines
+    properties = lines[:indexes[1]]
+    lines = lines[indexes[1]:]
+
+    return properties, lines
+
+
 def get_properties(lines: list) -> tuple[list, list]:
     """Function that retrieves all the lines that make up the yaml properties frontmatter"""
 
@@ -75,49 +93,51 @@ def get_tags(properties) -> list:
     return tags
 
 
-def format_images(lines: list) -> tuple:
+def scrape_images(line: str) -> list:
+    """Function to scrape all the image names and paths from the provided lines.
+    Returns a list of dictionary, with keys 'filename' and 'path'."""
+
+    # compile the regex expression
+    image_re = re.compile(precompiled["image"])
+    images = []
+
+    # TODO fix path when image is not in the same dir as the script
+    # scrape image names and paths from text
+    for im in image_re.findall(line):
+        images.append({"filename": im, "path": os.path.join(os.getcwd(), im)})
+
+    return images
+
+
+def format_images(text: str) -> str:
     """Function to format lines containing images, wrapping their references in HTML syntax.
     Returns a list of the formatted lines and a list of dictionaries containing the image information."""
 
     # compile the regex expression
     image_re = re.compile(precompiled["image"])
 
-    # initialize lists
-    images = []
-    formatted_lines = []
+    # format lines
+    if image_re.search(text):
+        text = text.replace("![[", "<img src=\"", 1).replace("]]", "\">", 1)
 
-    # format lines and append images filenames and paths to the images list
-    for line in lines:
-        for im in image_re.findall(line):
-            images.append({"filename": im, "path": os.path.join(os.getcwd(), im)})
-            line = line.replace("![[", "<img src=\"", 1).replace("]]", "\">", 1)
-        formatted_lines.append(line)
-
-    return formatted_lines, images
+    return text
 
 
-def format_math(lines: list) -> list:
+def format_math(text: str) -> str:
     """Function to format lines containing math expressions, wrapping them in anki-mathjax HTML syntax."""
 
     # compile the regex expressions
     math_re = re.compile(precompiled["math"])
     math_block_re = re.compile(precompiled["math_block"])
 
-    # initialize list
-    formatted_lines = []
-
     # format lines
-    for line in lines:
+    for expr in math_block_re.findall(text):
+        text = math_block_re.sub(f"<anki-mathjax block=true>{expr}</anki-mathjax>", text)
 
-        for expr in math_block_re.findall(line):
-            line = math_block_re.sub(f"<anki-mathjax block=true>{expr}</anki-mathjax>", line)
+    for expr in math_re.findall(text):
+        text = math_re.sub(f"<anki-mathjax>{expr}</anki-mathjax>", text)
 
-        for expr in math_re.findall(line):
-            line = math_re.sub(f"<anki-mathjax>{expr}</anki-mathjax>", line)
-
-        formatted_lines.append(line)
-
-    return formatted_lines
+    return text
 
 
 def group_lines(lines: list) -> list[list]:
@@ -145,7 +165,7 @@ def group_lines(lines: list) -> list[list]:
     return full_text
 
 
-def parse_card(lines: list) -> pandas.Series:
+def parse_card(lines: list, return_empty=False) -> pandas.Series:
     """Returns a pandas.Series object corresponding to a single card. The Series object has the following fields
     (indexes): front, back, id, inline, model."""
 
@@ -157,11 +177,16 @@ def parse_card(lines: list) -> pandas.Series:
     inline_reverse_re = re.compile(precompiled["inline_reverse_card"])
 
     # create the base return values
-    front = None
-    back = None
+    front = ""
+    back = ""
     id = None
     inline = False
     model = "Basic"
+    is_card = False
+
+    if return_empty:
+        return pd.Series([front, back, id, inline, model, is_card],
+                         index=["front", "back", "id", "inline", "model", "is_card"])
 
     for line in lines:
 
@@ -176,11 +201,14 @@ def parse_card(lines: list) -> pandas.Series:
             back = r.group(2).strip()
             id = int(r.group(3)) if r.group(3) is not None else None
             inline = True
-            return pd.Series([front, back, id, inline, model], index=["front", "back", "id", "inline", "model"])
+            is_card = True
+            return pd.Series([front, back, id, inline, model, is_card],
+                             index=["front", "back", "id", "inline", "model", "is_card"])
 
         # normal card parser
         if (r := question_re.search(line)) is not None:
             front = r.group(1)
+            is_card = True
         elif answer_re.search(line) is not None:
             if back is None:
                 back = line.strip(">")
@@ -191,13 +219,14 @@ def parse_card(lines: list) -> pandas.Series:
         elif empty_line_re.search(line) is not None:
             if front is not None and back is not None:
                 back = back.replace("\n", "<br />")
-                return pd.Series([front, back, id, inline, model], index=["front", "back", "id", "inline", "model"])
-
+                return pd.Series([front, back, id, inline, model, is_card],
+                                 index=["front", "back", "id", "inline", "model", "is_card"])
     # repeat check at end of file
     if front is not None and back is not None:
         back = back.replace("\n", "<br />")
 
-    return pd.Series([front, back, id, inline, model], index=["front", "back", "id", "inline", "model"])
+    return pd.Series([front, back, id, inline, model, is_card],
+                     index=["front", "back", "id", "inline", "model", "is_card"])
 
 
 def card_gen(lines, deck=None, tags=None):
