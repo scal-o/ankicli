@@ -77,6 +77,7 @@ def check_result(response):
         raise Exception(f"Server returned error: {response["error"]}")
 
 
+@ensure_connectivity
 def request_action(action, url=link, version=6, **kwargs):
     """Higher level function that handles the whole connection process and returns the server response"""
 
