@@ -176,6 +176,8 @@ def parse_card(lines: list, return_empty=False) -> pandas.Series:
     inline_re = re.compile(precompiled["inline_card"])
     inline_reverse_re = re.compile(precompiled["inline_reverse_card"])
 
+    index_names = ["front", "back", "id", "inline", "modelName", "is_card"]
+
     # create the base return values
     front = ""
     back = ""
@@ -185,8 +187,7 @@ def parse_card(lines: list, return_empty=False) -> pandas.Series:
     is_card = False
 
     if return_empty:
-        return pd.Series([front, back, id, inline, model, is_card],
-                         index=["front", "back", "id", "inline", "model", "is_card"])
+        return pd.Series([front, back, id, inline, model, is_card], index=index_names)
 
     for line in lines:
 
@@ -202,8 +203,7 @@ def parse_card(lines: list, return_empty=False) -> pandas.Series:
             id = int(r.group(3)) if r.group(3) is not None else None
             inline = True
             is_card = True
-            return pd.Series([front, back, id, inline, model, is_card],
-                             index=["front", "back", "id", "inline", "model", "is_card"])
+            return pd.Series([front, back, id, inline, model, is_card], index=index_names)
 
         # normal card parser
         if (r := question_re.search(line)) is not None:
@@ -219,14 +219,12 @@ def parse_card(lines: list, return_empty=False) -> pandas.Series:
         elif empty_line_re.search(line) is not None:
             if front is not None and back is not None:
                 back = back.replace("\n", "<br />")
-                return pd.Series([front, back, id, inline, model, is_card],
-                                 index=["front", "back", "id", "inline", "model", "is_card"])
+                return pd.Series([front, back, id, inline, model, is_card], index=index_names)
     # repeat check at end of file
     if front is not None and back is not None:
         back = back.replace("\n", "<br />")
 
-    return pd.Series([front, back, id, inline, model, is_card],
-                     index=["front", "back", "id", "inline", "model", "is_card"])
+    return pd.Series([front, back, id, inline, model, is_card], index=index_names)
 
 
 def card_gen(lines, deck=None, tags=None):
@@ -283,7 +281,34 @@ def card_gen(lines, deck=None, tags=None):
         card_dict = copy.deepcopy(std_dict)
 
 
-def insert_card_id(lines, index, id, inline=False) -> None:
+def insert_card_id(series: pd.Series) -> list[str]:
+    """Function to insert or modify the card id in the text lines of the dataframe entry."""
+
+    # precompile id regex
+    id_re = re.compile(precompiled["id"])
+
+    # retrieve last line of text from the series
+    line = series.text.pop()
+
+    # three cases:
+    # - the regex returns a match in the text -> sub the match with the new id
+    # - no match and the card is an inline type -> sub \n in line with id + \n
+    # - no match and no inline -> append new line with id
+    if id_re.search(line):
+        line = id_re.sub(f"^{series.id}", line)
+    elif series.inline is True:
+        line = re.sub("\n", f"^{series.id}\n", line)
+    else:
+        line = line + f"^{series.id}\n"
+
+    # put the modified line in its original place
+    series.text.append(line)
+
+    # return text lines
+    return series.text
+
+
+def insert_card_id2(lines, index, id, inline=False) -> None:
     """Function to insert the card id in the lines of the file. Simple wrapper around .insert"""
 
     if inline:
