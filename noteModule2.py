@@ -1,3 +1,4 @@
+import sys
 import deckModule
 import parseModule
 import pandas as pd
@@ -7,6 +8,15 @@ from requestModule import request_action
 
 # set up logger
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
+
+debug_handler = logging.StreamHandler(stream=sys.stdout)
+debug_handler.setLevel(logging.DEBUG)
+
+formatter = logging.Formatter('%(name)s::%(levelname)s - %(message)s')
+debug_handler.setFormatter(formatter)
+
+logger.addHandler(debug_handler)
 
 
 class NoteSet:
@@ -100,7 +110,7 @@ class NoteSet:
         if not deckModule.deck_exists(self.deckName):
             deckModule.create_deck(self.deckName)
 
-    def repair_errors(self) -> list[pd.DataFrame]:
+    def repair_errors(self) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Method to find and repair possible errors that may arise when uploading cards to Anki."""
 
         logger.info("Finding and repairing errors\n")
@@ -131,13 +141,19 @@ class NoteSet:
         logger.info("Looking for error notes\n")
 
         # filter dataframe to only keep card rows that don't have an id
+        logger.debug("Creating anki query\n")
         e_df = df.loc[(df["is_card"] == True) & (df["id"].isna())].copy()
+
+        # create query for the anki server
         e_ddf = e_df[["deckName", "modelName", "fields", "tags", "id"]]
         e_list = e_ddf.to_dict(orient="index")
         e_list = list(e_list.values())
 
+        # launch queries and gather results
+        logger.debug("Querying anki for possible errors in the cards\n")
         e_list = request_action("canAddNotesWithErrorDetail", notes=e_list)["result"]
 
+        logger.debug("Extracting error cards\n")
         e_df["error"] = [el.get("error") for el in e_list]
         e_df.dropna(subset=["error"], inplace=True)
 
@@ -147,7 +163,10 @@ class NoteSet:
     def repair_duplicate_notes(e_df):
         """Method to repair eventual duplicate notes"""
 
+        logger.info("Repairing duplicate notes\n")
+
         # filter error notes keeping the duplicate ones
+        logger.debug("Filtering duplicate notes from other errors\n")
         dup_df = e_df.loc[e_df["error"] == "cannot create note because it is a duplicate"].copy()
 
         # return the empty dataframe if no duplicate notes were found
@@ -155,10 +174,15 @@ class NoteSet:
             return dup_df
 
         # gather front of the cards and use them as queries to retrieve card ids from anki
+        logger.debug("Creating anki query\n")
         dup_front = dup_df["front"].to_list()
+
+        # launch query and gather results
+        logger.debug("Querying anki for the missing ids\n")
         dup_ids = [request_action("findNotes", query=el)["result"][0] for el in dup_front]
 
         # insert card id in the id column and add it/sub it in the text column
+        logger.debug("Inserting ids into the cards' text")
         dup_df["id"] = dup_ids
         dup_df["text"] = dup_df.apply(parseModule.insert_card_id, axis=1)
 
