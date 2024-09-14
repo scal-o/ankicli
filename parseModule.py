@@ -1,9 +1,8 @@
-import re
 import copy
 import os
-
-import pandas
+import re
 import pandas as pd
+
 """Module to handle parsing of text files"""
 
 # define a list of options used to compile the regular expressions throughout the module
@@ -165,7 +164,7 @@ def group_lines(lines: list) -> list[list]:
     return full_text
 
 
-def parse_card(lines: list, return_empty=False) -> pandas.Series:
+def parse_card(lines: list, return_empty=False) -> pd.Series:
     """Returns a pandas.Series object corresponding to a single card. The Series object has the following fields
     (indexes): front, back, id, inline, model."""
 
@@ -287,8 +286,11 @@ def insert_card_id(series: pd.Series) -> list[str]:
     # precompile id regex
     id_re = re.compile(precompiled["id"])
 
+    # deepcopy text list to avoid modifying the original by mistake
+    lines = copy.deepcopy(series.text)
+
     # retrieve last line of text from the series
-    line = series.text.pop()
+    line = lines.pop()
 
     # three cases:
     # - the regex returns a match in the text -> sub the match with the new id
@@ -302,10 +304,10 @@ def insert_card_id(series: pd.Series) -> list[str]:
         line = line + f"^{series.id}\n"
 
     # put the modified line in its original place
-    series.text.append(line)
+    lines.append(line)
 
     # return text lines
-    return series.text
+    return lines
 
 
 def insert_card_id2(lines, index, id, inline=False) -> None:

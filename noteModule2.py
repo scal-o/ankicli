@@ -11,6 +11,13 @@ logger = logging.getLogger(__name__)
 
 class NoteSet:
 
+    def __init__(self):
+        self.deckName = None
+        self.tags = None
+        self.file_path = None
+        self.media = None
+        self.df = None
+
     @classmethod
     def from_file(cls, path: str):
         """Method to instantiate a NoteSet object from a text file"""
@@ -92,6 +99,30 @@ class NoteSet:
         logger.debug("Checking deck\n")
         if not deckModule.deck_exists(self.deckName):
             deckModule.create_deck(self.deckName)
+
+    def repair_errors(self) -> list[pd.DataFrame]:
+        """Method to find and repair possible errors that may arise when uploading cards to Anki."""
+
+        logger.info("Finding and repairing errors\n")
+
+        # copy original dataframe
+        df = self.df.copy()
+
+        # find out which notes may produce an error
+        e_df = self.find_error_notes(df)
+
+        # repair any duplicated notes
+        dup_df = self.repair_duplicate_notes(e_df)
+
+        # update repaired notes in the df
+        df.update(dup_df)
+
+        # drop repaired notes from the error df
+        # kinda complex to do an anti-join tbh
+        e_df.drop(e_df.index[e_df.index.isin(dup_df.index)], inplace=True)
+        e_df = e_df.loc[~e_df.index.isin(dup_df.index)]
+
+        return df, e_df
 
     @staticmethod
     def find_error_notes(df: pd.DataFrame) -> pd.DataFrame:
