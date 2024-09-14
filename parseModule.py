@@ -1,6 +1,7 @@
 import copy
 import os
 import re
+import numpy as np
 import pandas as pd
 
 """Module to handle parsing of text files"""
@@ -286,6 +287,12 @@ def insert_card_id(series: pd.Series) -> list[str]:
     # precompile id regex
     id_re = re.compile(precompiled["id"])
 
+    # create sub line
+    if np.isnan(series.id):
+        sub = ""
+    else:
+        sub = f"^{series.id}"
+
     # deepcopy text list to avoid modifying the original by mistake
     lines = copy.deepcopy(series.text)
 
@@ -297,11 +304,11 @@ def insert_card_id(series: pd.Series) -> list[str]:
     # - no match and the card is an inline type -> sub \n in line with id + \n
     # - no match and no inline -> append new line with id
     if id_re.search(line):
-        line = id_re.sub(f"^{series.id}", line)
+        line = id_re.sub(f"{sub}", line)
     elif series.inline is True:
-        line = re.sub("\n", f"^{series.id}\n", line)
+        line = re.sub("\n", f"{sub}\n", line)
     else:
-        line = line + f"^{series.id}\n"
+        line = line + f"{sub}\n"
 
     # put the modified line in its original place
     lines.append(line)

@@ -4,6 +4,7 @@ import parseModule
 import pandas as pd
 import numpy as np
 import logging
+import json
 from requestModule import request_action
 
 # set up logger
@@ -110,13 +111,94 @@ class NoteSet:
         if not deckModule.deck_exists(self.deckName):
             deckModule.create_deck(self.deckName)
 
-    def repair_errors(self) -> tuple[pd.DataFrame, pd.DataFrame]:
+    @staticmethod
+    def add_notes(df: pd.DataFrame) -> list:
+        """Method to add notes to anki"""
+
+        df = df[["deckName", "modelName", "fields", "tags"]].copy()
+        df_l = df.to_dict(orient="index")
+        df_l = list(df_l.values())
+
+        result = request_action("addNotes", notes=df_l)["result"]
+
+        return result
+
+    def update_existing_notes(self) -> None:
+        """Method to update already existing notes to the anki server"""
+
+        # copy original dataframe
+        df = self.df.copy()
+
+        # filter dataframe to only keep cards that already have an id
+        df = df.loc[(df["is_card"] == True) & (~df["id"].isna())]
+
+        # gather ids of existing notes
+        df_ids = df["id"].map(int)
+        df_ids = df_ids.to_list()
+
+        # query the database
+        queried_notes = request_action("notesInfo", notes=df_ids)["result"]
+        queried_notes = [note if len(note) != 0 else None for note in queried_notes]
+
+        # separate deleted notes
+        df, deleted_notes = self.find_deleted_notes(df, queried_notes)
+        deleted_notes = self.repair_deleted_notes(deleted_notes)
+
+        # repair deleted notes
+        deleted_notes = self.repair_deleted_notes(deleted_notes)
+        self.df.update(deleted_notes)
+
+        # check and adjust deck for the existing notes
+        self.adjust_notes_deck(df)
+
+        # divide existing notes in various dfs
+        updatable_notes, non_updatable_notes = self.find_updatable_notes(df, queried_notes)
+
+        # create list of notes from df
+        nl = updatable_notes[["deckName", "modelName", "fields", "tags", "id"]].copy()
+        nl.id = nl.id.map(int)
+        nl = nl.to_dict(orient="index")
+        nl = list(nl.values())
+
+        # update notes
+        for note in nl:
+            request_action("updateNote", note=note)
+
+    def upload_new_notes(self) -> None:
+        """Method to upload new notes to the anki server"""
+
+        # copy original dataframe
+        df = self.df.copy()
+
+        # filter dataframe to only keep cards that don't have an id
+        df = df.loc[(df["is_card"] == True) & (df["id"].isna())]
+
+        # find and repair error notes
+        df, e_df = self.repair_errors(df)
+
+        # if some notes could not be added, remove them from the df and write an error log
+        if len(e_df) != 0:
+            logging.warning("\nSome of the new notes could not be added to the deck.")
+            self.write_to_error_log(e_df)
+            df = df.loc[~df.index.isin(e_df.index)]
+
+        # adding cards to the anki server
+        df_ids = self.add_notes(df)
+
+        # add ids to the
+        logger.debug("Inserting ids into the cards' text")
+        df["id"] = df_ids
+        df["text"] = df.apply(parseModule.insert_card_id, axis=1)
+
+        self.df.update(df)
+
+    def repair_errors(self, df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Method to find and repair possible errors that may arise when uploading cards to Anki."""
 
         logger.info("Finding and repairing errors\n")
 
-        # copy original dataframe
-        df = self.df.copy()
+        # copy df
+        df = df.copy()
 
         # find out which notes may produce an error
         e_df = self.find_error_notes(df)
@@ -129,23 +211,22 @@ class NoteSet:
 
         # drop repaired notes from the error df
         # kinda complex to do an anti-join tbh
-        e_df.drop(e_df.index[e_df.index.isin(dup_df.index)], inplace=True)
         e_df = e_df.loc[~e_df.index.isin(dup_df.index)]
 
         return df, e_df
 
     @staticmethod
-    def find_error_notes(df: pd.DataFrame) -> pd.DataFrame:
+    def find_error_notes(e_df: pd.DataFrame) -> pd.DataFrame:
         """Method to check that all the new notes can be added to the deck."""
 
         logger.info("Looking for error notes\n")
 
-        # filter dataframe to only keep card rows that don't have an id
-        logger.debug("Creating anki query\n")
-        e_df = df.loc[(df["is_card"] == True) & (df["id"].isna())].copy()
+        # copy df
+        e_df = e_df.copy()
 
         # create query for the anki server
-        e_ddf = e_df[["deckName", "modelName", "fields", "tags", "id"]]
+        logger.debug("Creating anki query\n")
+        e_ddf = e_df[["deckName", "modelName", "fields", "tags"]].copy()
         e_list = e_ddf.to_dict(orient="index")
         e_list = list(e_list.values())
 
@@ -160,7 +241,7 @@ class NoteSet:
         return e_df
 
     @staticmethod
-    def repair_duplicate_notes(e_df):
+    def repair_duplicate_notes(e_df: pd.DataFrame) -> pd.DataFrame:
         """Method to repair eventual duplicate notes"""
 
         logger.info("Repairing duplicate notes\n")
@@ -188,3 +269,82 @@ class NoteSet:
 
         # return the dataframe with the repaired cards
         return dup_df.drop(["error"], axis=1)
+
+    @staticmethod
+    def find_deleted_notes(df: pd.DataFrame, queried_notes):
+        """Method to check that all the notes with an id actually exist in the anki server"""
+
+        # copy dataframe
+        df = df.copy()
+
+        # filter deleted notes
+        del_index = [True if el is None else False for el in queried_notes]
+        deleted_notes = df.loc[del_index].copy()
+        df = df.loc[~df.index.isin(deleted_notes.index)].copy()
+
+        return df, deleted_notes
+
+    @staticmethod
+    def repair_deleted_notes(deleted_notes: pd.DataFrame) -> pd.DataFrame:
+        """Method to repair deleted notes"""
+
+        # copy original dataframe
+        deleted_notes = deleted_notes.copy()
+
+        # assign the id value to NaN
+        deleted_notes.id = np.nan
+
+        # delete id from card text
+        deleted_notes.text = deleted_notes.apply(parseModule.insert_card_id, axis=1)
+
+        return deleted_notes
+
+    @staticmethod
+    def find_updatable_notes(df: pd.DataFrame, queried_notes: list):
+        """Method to sort updatable and up-to-date notes"""
+
+        # copy dataframe
+        df = df.copy()
+
+        # create list with important query info
+        queried_fields = [{"Front": x["fields"]["Front"]["value"], "Back": x["fields"]["Back"]["value"]} for x in queried_notes if x is not None]
+
+        # create updatable / up to date notes dfs
+        updatable_notes = df.loc[df.fields != queried_fields].copy()
+        up_to_date_notes = df.loc[~df.index.isin(updatable_notes.index)].copy()
+
+        return updatable_notes, up_to_date_notes
+
+    @staticmethod
+    def adjust_notes_deck(df: pd.DataFrame) -> None:
+        """Check that the notes belong to the right deck in anki"""
+
+        # copy dataframe
+        df = df.copy()
+
+        # retrieve ids and deckName
+        df_ids = df.id.to_list()
+        deck_name = df.deckName.iloc[0]
+
+        # query the database to get a dictionary: {deck: [note ids]}
+        deck_dict = request_action("getDecks", cards=df_ids)["result"]
+
+        # gather ids of cards that are in the wrong deck
+        wrong_deck_ids = []
+        # for every key in the dictionary that is different from the one defined in the noteSet deckName attribute,
+        # add the items of its list to the wrongDeck list
+        for key in list(deck_dict):
+            if key != deck_name:
+                wrong_deck_ids.extend(deck_dict[key])
+
+        # change notes' deck
+        request_action("changeDeck", cards=wrong_deck_ids, deck=deck_name)
+
+    @staticmethod
+    def write_to_error_log(e_df: pd.DataFrame, file="error_log.txt") -> None:
+
+        logger.warning("Writing error log...\n")
+
+        # write error log with the notes in the error df
+        with open(file, "a") as f:
+            f.writelines(f"\n{json.dumps(e_df.to_dict(orient="index"))}")
