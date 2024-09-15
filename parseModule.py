@@ -28,7 +28,7 @@ precompiled = {
     "tags": r"^- ([\w/]+)",
     "question": r"^>\[!question]-?\s*(.+)(#card)",
     "answer": r"^>(.*)(?<!\#card)$",
-    "id": r"<!--ID: (\d+)-->|\^(\d+)",
+    "id": r"<!--ID: (\d+)-->|\^(\d+)\n",
     "empty_line": r"^(\s+)?\n",
     "image": r"!\[\[([\w\s\.]+)\]\]",
     "math": r"\$([^\s][^\$]+)\$",
@@ -325,6 +325,10 @@ def insert_card_id(series: pd.Series) -> list[str]:
     else:
         sub = f"^{series.id}"
 
+    # if the card is inline, adjust the sub so that subbing the id with the empty str doesn't ruin line ordering
+    if series.inline is True:
+        sub = sub + "\n"
+
     # deepcopy text list to avoid modifying the original by mistake
     lines = copy.deepcopy(series.text)
 
@@ -338,7 +342,7 @@ def insert_card_id(series: pd.Series) -> list[str]:
     if id_re.search(line):
         line = id_re.sub(f"{sub}", line)
     elif series.inline is True:
-        line = re.sub("\n", f"{sub}\n", line)
+        line = re.sub("\n", f"{sub}", line)
     else:
         line = line + f"{sub}\n"
 

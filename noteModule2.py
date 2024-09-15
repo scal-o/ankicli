@@ -364,3 +364,14 @@ class NoteSet:
         # upload every image to the media folder
         for file in self.media:
             request_action("storeMediaFile", filename=file["filename"], path=file["path"])
+
+    def save_file(self) -> None:
+        """Method to save the updated lines to the file"""
+
+        # create file lines list
+        lines = self.df.text.to_list()
+        lines = [line for group in lines for line in group]
+
+        # write lines to file
+        with open(self.file_path, mode = "w", encoding="utf-8") as f:
+            f.writelines(lines)
