@@ -142,11 +142,11 @@ class NoteSet:
 
         # separate deleted notes
         df, deleted_notes = self.find_deleted_notes(df, queried_notes)
-        deleted_notes = self.repair_deleted_notes(deleted_notes)
 
-        # repair deleted notes
-        deleted_notes = self.repair_deleted_notes(deleted_notes)
-        self.df.update(deleted_notes)
+        # repair deleted notes if there are any
+        if not deleted_notes.empty:
+            deleted_notes = self.repair_deleted_notes(deleted_notes)
+            self.df.update(deleted_notes)
 
         # check and adjust deck for the existing notes
         self.adjust_notes_deck(df)
@@ -182,15 +182,22 @@ class NoteSet:
             self.write_to_error_log(e_df)
             df = df.loc[~df.index.isin(e_df.index)]
 
-        # adding cards to the anki server
-        df_ids = self.add_notes(df)
-
-        # add ids to the
-        logger.debug("Inserting ids into the cards' text")
-        df["id"] = df_ids
-        df["text"] = df.apply(parseModule.insert_card_id, axis=1)
-
+        # update df removing duplicate notes
         self.df.update(df)
+        df = df.loc[(df["is_card"] == True) & (df["id"].isna())]
+
+        # if the df is empty, it means that no more cards have to be added to anki
+        if not df.empty:
+
+            # adding cards to the anki server
+            df_ids = self.add_notes(df)
+
+            # add ids to the
+            logger.debug("Inserting ids into the cards' text")
+            df["id"] = df_ids
+            df["text"] = df.apply(parseModule.insert_card_id, axis=1)
+
+            self.df.update(df)
 
     def repair_errors(self, df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Method to find and repair possible errors that may arise when uploading cards to Anki."""
@@ -251,7 +258,7 @@ class NoteSet:
         dup_df = e_df.loc[e_df["error"] == "cannot create note because it is a duplicate"].copy()
 
         # return the empty dataframe if no duplicate notes were found
-        if len(dup_df.index) == 0:
+        if dup_df.empty:
             return dup_df
 
         # gather front of the cards and use them as queries to retrieve card ids from anki
@@ -307,7 +314,9 @@ class NoteSet:
         df = df.copy()
 
         # create list with important query info
-        queried_fields = [{"Front": x["fields"]["Front"]["value"], "Back": x["fields"]["Back"]["value"]} for x in queried_notes if x is not None]
+        queried_fields = [{"Front": x["fields"]["Front"]["value"],
+                           "Back": x["fields"]["Back"]["value"]}
+                          for x in queried_notes if x is not None]
 
         # create updatable / up to date notes dfs
         updatable_notes = df.loc[df.fields != queried_fields].copy()
