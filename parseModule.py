@@ -1,10 +1,25 @@
 import copy
 import os
 import re
+import sys
 import numpy as np
 import pandas as pd
-
+import logging
+from pathlib import Path
 """Module to handle parsing of text files"""
+
+# set up logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
+
+handler = logging.StreamHandler(stream=sys.stdout)
+handler.setLevel(logging.DEBUG)
+
+formatter = logging.Formatter('%(name)s::%(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+
+logger.addHandler(handler)
+
 
 # define a list of options used to compile the regular expressions throughout the module
 precompiled = {
@@ -93,7 +108,7 @@ def get_tags(properties) -> list:
     return tags
 
 
-def scrape_images(line: str) -> list:
+def scrape_images(line: str, filepath: str) -> list:
     """Function to scrape all the image names and paths from the provided lines.
     Returns a list of dictionary, with keys 'filename' and 'path'."""
 
@@ -101,10 +116,27 @@ def scrape_images(line: str) -> list:
     image_re = re.compile(precompiled["image"])
     images = []
 
-    # TODO fix path when image is not in the same dir as the script
     # scrape image names and paths from text
     for im in image_re.findall(line):
-        images.append({"filename": im, "path": os.path.join(os.getcwd(), im)})
+
+        # create image Path obj
+        im_path = Path(im)
+
+        # check the image path and make sure it exists
+        if im_path.absolute().exists():
+            im_path = im_path.absolute()
+        else:
+            # if the absolute path doesn't point to an object, try building it from the text file location
+            file_dir = Path(filepath).parent.absolute()
+            possible_path = file_dir/im_path
+            if possible_path.exists():
+                im_path = possible_path
+            else:
+                logger.warning(f"Unable to find absolute path for file {im_path}. Returning relative path instead")
+
+        # append image information to list
+        im_path = str(im_path)
+        images.append({"filename": im, "path": im_path})
 
     return images
 

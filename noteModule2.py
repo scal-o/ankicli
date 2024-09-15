@@ -73,8 +73,8 @@ class NoteSet:
 
         # scrape images from file lines
         logger.debug("Scraping images from file lines\n")
-        fr_im = df.front.apply(parseModule.scrape_images)
-        bk_im = df.back.apply(parseModule.scrape_images)
+        fr_im = df.front.apply(parseModule.scrape_images, filepath=nset.file_path)
+        bk_im = df.back.apply(parseModule.scrape_images, filepath=nset.file_path)
         images = fr_im + bk_im
         images = [im for im_list in images for im in im_list]
         nset.media = images
@@ -348,3 +348,10 @@ class NoteSet:
         # write error log with the notes in the error df
         with open(file, "a") as f:
             f.writelines(f"\n{json.dumps(e_df.to_dict(orient="index"))}")
+
+    def upload_media(self) -> None:
+        """Method to upload media to anki server"""
+
+        # upload every image to the media folder
+        for file in self.media:
+            request_action("storeMediaFile", filename=file["filename"], path=file["path"])
