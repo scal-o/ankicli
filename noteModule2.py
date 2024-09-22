@@ -123,8 +123,39 @@ class NoteSet:
 
         return result
 
-    def update_existing_notes(self) -> None:
-        """Method to update already existing notes to the anki server"""
+    def check_notes(self) -> None:
+        """Method to perform general checks on the database for different kind of notes that could build up to errors:
+        - deleted notes
+        - duplicate notes
+        - wrong deck notes"""
+
+        # # # checks on new notes =====
+        # check on new notes first as duplicate notes might have to be updated, while deleted notes only need to be
+        # uploaded to anki again
+
+        # copy original dataframe
+        df = self.df.copy()
+
+        # filter dataframe to only keep cards that don't have an id
+        df = df.loc[(df["is_card"] == True) & (df["id"].isna())]
+
+        # find and repair error notes
+        df, e_df = self.repair_errors(df)
+
+        # if some notes could not be added, remove them from the df and write an error log
+        if len(e_df) != 0:
+            logging.warning("\nSome of the new notes could not be added to the deck.")
+            self.write_to_error_log(e_df)
+            df = df.loc[~df.index.isin(e_df.index)]
+
+        # update df removing duplicate notes
+        self.df.update(df)
+        # remove error notes from the noteset df
+        self.df = self.df.loc[~self.df.index.isin(e_df.index)]
+
+        # # # checks on existing notes =====
+        # check on existing notes to find notes that have been deleted from the server but still have an id in the
+        # file
 
         # copy original dataframe
         df = self.df.copy()
@@ -146,23 +177,42 @@ class NoteSet:
         # repair deleted notes if there are any
         if not deleted_notes.empty:
             deleted_notes = self.repair_deleted_notes(deleted_notes)
-            self.df.update(deleted_notes)
+            self.df.loc[deleted_notes.index] = deleted_notes
 
         # check and adjust deck for the existing notes
         self.adjust_notes_deck(df)
 
-        # divide existing notes in various dfs
-        updatable_notes, non_updatable_notes = self.find_updatable_notes(df, queried_notes)
+    def update_existing_notes(self) -> None:
+        """Method to update already existing notes to the anki server"""
 
-        # create list of notes from df
-        nl = updatable_notes[["deckName", "modelName", "fields", "tags", "id"]].copy()
-        nl.id = nl.id.map(int)
-        nl = nl.to_dict(orient="index")
-        nl = list(nl.values())
+        # copy original dataframe
+        df = self.df.copy()
 
-        # update notes
-        for note in nl:
-            request_action("updateNote", note=note)
+        # filter dataframe to only keep cards that already have an id
+        df = df.loc[(df["is_card"] == True) & (~df["id"].isna())]
+
+        if not df.empty:
+
+            # gather ids of existing notes
+            df_ids = df["id"].map(int)
+            df_ids = df_ids.to_list()
+
+            # query the database
+            queried_notes = request_action("notesInfo", notes=df_ids)["result"]
+            queried_notes = [note if len(note) != 0 else None for note in queried_notes]
+
+            # divide existing notes in various dfs
+            updatable_notes, non_updatable_notes = self.find_updatable_notes(df, queried_notes)
+
+            # create list of notes from df
+            nl = updatable_notes[["deckName", "modelName", "fields", "tags", "id"]].copy()
+            nl.id = nl.id.map(int)
+            nl = nl.to_dict(orient="index")
+            nl = list(nl.values())
+
+            # update notes
+            for note in nl:
+                request_action("updateNote", note=note)
 
     def upload_new_notes(self) -> None:
         """Method to upload new notes to the anki server"""
@@ -171,19 +221,6 @@ class NoteSet:
         df = self.df.copy()
 
         # filter dataframe to only keep cards that don't have an id
-        df = df.loc[(df["is_card"] == True) & (df["id"].isna())]
-
-        # find and repair error notes
-        df, e_df = self.repair_errors(df)
-
-        # if some notes could not be added, remove them from the df and write an error log
-        if len(e_df) != 0:
-            logging.warning("\nSome of the new notes could not be added to the deck.")
-            self.write_to_error_log(e_df)
-            df = df.loc[~df.index.isin(e_df.index)]
-
-        # update df removing duplicate notes
-        self.df.update(df)
         df = df.loc[(df["is_card"] == True) & (df["id"].isna())]
 
         # if the df is empty, it means that no more cards have to be added to anki
@@ -331,23 +368,25 @@ class NoteSet:
         # copy dataframe
         df = df.copy()
 
-        # retrieve ids and deckName
-        df_ids = df.id.to_list()
-        deck_name = df.deckName.iloc[0]
+        if not df.empty:
 
-        # query the database to get a dictionary: {deck: [note ids]}
-        deck_dict = request_action("getDecks", cards=df_ids)["result"]
+            # retrieve ids and deckName
+            df_ids = df.id.to_list()
+            deck_name = df.deckName.iloc[0]
 
-        # gather ids of cards that are in the wrong deck
-        wrong_deck_ids = []
-        # for every key in the dictionary that is different from the one defined in the noteSet deckName attribute,
-        # add the items of its list to the wrongDeck list
-        for key in list(deck_dict):
-            if key != deck_name:
-                wrong_deck_ids.extend(deck_dict[key])
+            # query the database to get a dictionary: {deck: [note ids]}
+            deck_dict = request_action("getDecks", cards=df_ids)["result"]
 
-        # change notes' deck
-        request_action("changeDeck", cards=wrong_deck_ids, deck=deck_name)
+            # gather ids of cards that are in the wrong deck
+            wrong_deck_ids = []
+            # for every key in the dictionary that is different from the one defined in the noteSet deckName attribute,
+            # add the items of its list to the wrongDeck list
+            for key in list(deck_dict):
+                if key != deck_name:
+                    wrong_deck_ids.extend(deck_dict[key])
+
+            # change notes' deck
+            request_action("changeDeck", cards=wrong_deck_ids, deck=deck_name)
 
     @staticmethod
     def write_to_error_log(e_df: pd.DataFrame, file="error_log.txt") -> None:
