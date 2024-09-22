@@ -33,7 +33,7 @@ class NoteSet:
     def from_file(cls, path: str):
         """Method to instantiate a NoteSet object from a text file"""
 
-        logger.info(f"Instantiating NoteSet from file: {path}\n")
+        logger.info(f"Instantiating NoteSet from file: {path}")
 
         # create class instance
         nset = cls()
@@ -42,12 +42,12 @@ class NoteSet:
         nset.file_path = path
 
         # retrieve file lines and properties
-        logger.debug("Reading file lines\n")
+        logger.debug("Reading file lines")
         lines = parseModule.get_lines(path)
         properties, lines = parseModule.extract_properties(lines)
 
         # assign deckName and common tags as found in the yaml frontmatter (properties)
-        logger.debug("Parsing deck and tags info from file yaml frontmatter\n")
+        logger.debug("Parsing deck and tags info from file yaml frontmatter")
         strip_props = [line.strip() for line in properties]
 
         nset.deckName = parseModule.get_deck(strip_props)
@@ -59,7 +59,7 @@ class NoteSet:
         grouped_lines = pd.DataFrame(grouped_lines, columns=["text"])
 
         # create and fill pandas.DataFrame with the card information
-        logger.debug("Parsing cards from file lines\n")
+        logger.debug("Parsing cards from file lines")
         df = grouped_lines.text.apply(parseModule.parse_card)
         df = pd.concat([grouped_lines, df], axis=1)
 
@@ -72,7 +72,7 @@ class NoteSet:
         df = pd.concat([properties, df], ignore_index=True)
 
         # scrape images from file lines
-        logger.debug("Scraping images from file lines\n")
+        logger.debug("Scraping images from file lines")
         fr_im = df.front.apply(parseModule.scrape_images, filepath=nset.file_path)
         bk_im = df.back.apply(parseModule.scrape_images, filepath=nset.file_path)
         images = fr_im + bk_im
@@ -80,7 +80,7 @@ class NoteSet:
         nset.media = images
 
         # format front and back of cards
-        logger.debug("Formatting front and back text\n")
+        logger.debug("Formatting front and back text")
         df[["front", "back"]] = df[["front", "back"]].map(parseModule.format_images)
         df[["front", "back"]] = df[["front", "back"]].map(parseModule.format_math)
 
@@ -88,11 +88,11 @@ class NoteSet:
         df[["front", "back"]] = df[["front", "back"]].map(parseModule.format_math)
 
         # create field column
-        logger.debug("Creating fields column\n")
+        logger.debug("Creating fields column")
         df.loc[df["is_card"] == True, "fields"] = df.apply(lambda x: {"Front": x.front, "Back": x.back}, axis=1)
 
         # add tags and deck info to cards
-        logger.debug("Adding tags and deck info\n")
+        logger.debug("Adding tags and deck info")
         df["tags"] = np.empty((len(df.index), 0)).tolist()
         df.tags.apply(lambda x: x.extend(nset.tags))
         df["deckName"] = nset.deckName
@@ -101,13 +101,13 @@ class NoteSet:
         nset.df = df
 
         # return instantiated NoteSet
-        logger.info("NoteSet instantiated\n")
+        logger.info("NoteSet instantiated")
         return nset
 
     def check_deck(self) -> None:
         """Method to check that the NoteSet deck exists in the server and create it if it does not."""
 
-        logger.debug("Checking deck\n")
+        logger.debug("Checking deck")
         if not deckModule.deck_exists(self.deckName):
             deckModule.create_deck(self.deckName)
 
@@ -115,10 +115,14 @@ class NoteSet:
     def add_notes(df: pd.DataFrame) -> list:
         """Method to add notes to anki"""
 
+        # creating list of cards to add
+        logger.debug("Creating list of cards to upload")
         df = df[["deckName", "modelName", "fields", "tags"]].copy()
         df_l = df.to_dict(orient="index")
         df_l = list(df_l.values())
 
+        # uploading cards
+        logger.debug("Uploading cards to anki server")
         result = request_action("addNotes", notes=df_l)["result"]
 
         return result
@@ -129,9 +133,12 @@ class NoteSet:
         - duplicate notes
         - wrong deck notes"""
 
+        logger.info("Checking notes")
+
         # # # checks on new notes =====
         # check on new notes first as duplicate notes might have to be updated, while deleted notes only need to be
         # uploaded to anki again
+        logger.debug("Checking new notes")
 
         # copy original dataframe
         df = self.df.copy()
@@ -140,6 +147,7 @@ class NoteSet:
         df = df.loc[(df["is_card"] == True) & (df["id"].isna())]
 
         # find and repair error notes
+        logger.debug("Find and repair errors in new notes")
         df, e_df = self.repair_errors(df)
 
         # if some notes could not be added, remove them from the df and write an error log
@@ -148,14 +156,16 @@ class NoteSet:
             self.write_to_error_log(e_df)
             df = df.loc[~df.index.isin(e_df.index)]
 
-        # update df removing duplicate notes
+        # update df with duplicate notes info (id, etc.)
         self.df.update(df)
         # remove error notes from the noteset df
+        # TODO replace deleting notes with maybe setting is_card to False in order not to upload them and return errors
         self.df = self.df.loc[~self.df.index.isin(e_df.index)]
 
         # # # checks on existing notes =====
         # check on existing notes to find notes that have been deleted from the server but still have an id in the
         # file
+        logger.debug("Checking existing notes")
 
         # copy original dataframe
         df = self.df.copy()
@@ -168,9 +178,11 @@ class NoteSet:
         df_ids = df_ids.to_list()
 
         # query the database
+        logger.debug("Querying anki for notes info")
         queried_notes = request_action("notesInfo", notes=df_ids)["result"]
         queried_notes = [note if len(note) != 0 else None for note in queried_notes]
 
+        logger.debug("Finding and repairing deleted notes")
         # separate deleted notes
         df, deleted_notes = self.find_deleted_notes(df, queried_notes)
 
@@ -180,10 +192,13 @@ class NoteSet:
             self.df.loc[deleted_notes.index] = deleted_notes
 
         # check and adjust deck for the existing notes
+        logger.debug("Adjust deck of already existing cards")
         self.adjust_notes_deck(df)
 
     def update_existing_notes(self) -> None:
         """Method to update already existing notes to the anki server"""
+
+        logger.info("Updating existing notes")
 
         # copy original dataframe
         df = self.df.copy()
@@ -198,24 +213,30 @@ class NoteSet:
             df_ids = df_ids.to_list()
 
             # query the database
+            logger.debug("Querying anki for existing notes")
             queried_notes = request_action("notesInfo", notes=df_ids)["result"]
             queried_notes = [note if len(note) != 0 else None for note in queried_notes]
 
             # divide existing notes in various dfs
+            logger.debug("Finding notes that have to be updated")
             updatable_notes, non_updatable_notes = self.find_updatable_notes(df, queried_notes)
 
             # create list of notes from df
+            logger.debug("Creating list of updatable notes")
             nl = updatable_notes[["deckName", "modelName", "fields", "tags", "id"]].copy()
             nl.id = nl.id.map(int)
             nl = nl.to_dict(orient="index")
             nl = list(nl.values())
 
             # update notes
+            logger.debug("Updating notes")
             for note in nl:
                 request_action("updateNote", note=note)
 
     def upload_new_notes(self) -> None:
         """Method to upload new notes to the anki server"""
+
+        logger.info("Uploading new notes")
 
         # copy original dataframe
         df = self.df.copy()
@@ -227,6 +248,7 @@ class NoteSet:
         if not df.empty:
 
             # adding cards to the anki server
+            logger.debug("Adding cards to server")
             df_ids = self.add_notes(df)
 
             # add ids to the
@@ -239,15 +261,15 @@ class NoteSet:
     def repair_errors(self, df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Method to find and repair possible errors that may arise when uploading cards to Anki."""
 
-        logger.info("Finding and repairing errors\n")
-
         # copy df
         df = df.copy()
 
         # find out which notes may produce an error
+        logger.debug("Finding error notes")
         e_df = self.find_error_notes(df)
 
         # repair any duplicated notes
+        logger.debug("Repairing duplicate notes")
         dup_df = self.repair_duplicate_notes(e_df)
 
         # update repaired notes in the df
@@ -263,22 +285,20 @@ class NoteSet:
     def find_error_notes(e_df: pd.DataFrame) -> pd.DataFrame:
         """Method to check that all the new notes can be added to the deck."""
 
-        logger.info("Looking for error notes\n")
-
         # copy df
         e_df = e_df.copy()
 
         # create query for the anki server
-        logger.debug("Creating anki query\n")
+        logger.debug("Creating anki query")
         e_ddf = e_df[["deckName", "modelName", "fields", "tags"]].copy()
         e_list = e_ddf.to_dict(orient="index")
         e_list = list(e_list.values())
 
         # launch queries and gather results
-        logger.debug("Querying anki for possible errors in the cards\n")
+        logger.debug("Querying anki for possible errors in the cards")
         e_list = request_action("canAddNotesWithErrorDetail", notes=e_list)["result"]
 
-        logger.debug("Extracting error cards\n")
+        logger.debug("Extracting error cards")
         e_df["error"] = [el.get("error") for el in e_list]
         e_df.dropna(subset=["error"], inplace=True)
 
@@ -288,10 +308,8 @@ class NoteSet:
     def repair_duplicate_notes(e_df: pd.DataFrame) -> pd.DataFrame:
         """Method to repair eventual duplicate notes"""
 
-        logger.info("Repairing duplicate notes\n")
-
         # filter error notes keeping the duplicate ones
-        logger.debug("Filtering duplicate notes from other errors\n")
+        logger.debug("Filtering duplicate notes from other errors")
         dup_df = e_df.loc[e_df["error"] == "cannot create note because it is a duplicate"].copy()
 
         # return the empty dataframe if no duplicate notes were found
@@ -299,11 +317,11 @@ class NoteSet:
             return dup_df
 
         # gather front of the cards and use them as queries to retrieve card ids from anki
-        logger.debug("Creating anki query\n")
+        logger.debug("Creating anki query")
         dup_front = dup_df["front"].to_list()
 
         # launch query and gather results
-        logger.debug("Querying anki for the missing ids\n")
+        logger.debug("Querying anki for the missing ids")
         dup_ids = [request_action("findNotes", query=el)["result"][0] for el in dup_front]
 
         # insert card id in the id column and add it/sub it in the text column
@@ -322,6 +340,7 @@ class NoteSet:
         df = df.copy()
 
         # filter deleted notes
+        logger.debug("Filtering deleted notes")
         del_index = [True if el is None else False for el in queried_notes]
         deleted_notes = df.loc[del_index].copy()
         df = df.loc[~df.index.isin(deleted_notes.index)].copy()
@@ -339,6 +358,7 @@ class NoteSet:
         deleted_notes.id = np.nan
 
         # delete id from card text
+        logger.debug("Deleting ids from deleted cards")
         deleted_notes.text = deleted_notes.apply(parseModule.insert_card_id, axis=1)
 
         return deleted_notes
@@ -351,11 +371,13 @@ class NoteSet:
         df = df.copy()
 
         # create list with important query info
+        logger.debug("Building note fields from query result")
         queried_fields = [{"Front": x["fields"]["Front"]["value"],
                            "Back": x["fields"]["Back"]["value"]}
                           for x in queried_notes if x is not None]
 
         # create updatable / up to date notes dfs
+        logger.debug("Divide notes in up-to-date and updatable")
         updatable_notes = df.loc[df.fields != queried_fields].copy()
         up_to_date_notes = df.loc[~df.index.isin(updatable_notes.index)].copy()
 
@@ -375,9 +397,11 @@ class NoteSet:
             deck_name = df.deckName.iloc[0]
 
             # query the database to get a dictionary: {deck: [note ids]}
+            logger.debug("Querying anki for card decks")
             deck_dict = request_action("getDecks", cards=df_ids)["result"]
 
             # gather ids of cards that are in the wrong deck
+            logger.debug("Create list of cards in the wrong decks")
             wrong_deck_ids = []
             # for every key in the dictionary that is different from the one defined in the noteSet deckName attribute,
             # add the items of its list to the wrongDeck list
@@ -386,12 +410,13 @@ class NoteSet:
                     wrong_deck_ids.extend(deck_dict[key])
 
             # change notes' deck
+            logger.debug("Change cards deck")
             request_action("changeDeck", cards=wrong_deck_ids, deck=deck_name)
 
     @staticmethod
     def write_to_error_log(e_df: pd.DataFrame, file="error_log.txt") -> None:
 
-        logger.warning("Writing error log...\n")
+        logger.warning("Writing error log...")
 
         # write error log with the notes in the error df
         with open(file, "a") as f:
