@@ -22,20 +22,20 @@ logger.addHandler(handler)
 
 
 # define a list of options used to compile the regular expressions throughout the module
-precompiled = {
-    "properties": "---",
-    "deck": r"cards-deck: ([\w:\-_\s]+)",
-    "tags": r"^- ([\w/]+)",
-    "question": r"^>\[!question]-?\s*(.+)(#card)",
-    "answer": r"^>(.*)(?<!\#card)$",
-    "id": r"<!--ID: (\d+)-->|\^(\d+)\n",
-    "empty_line": r"^(\s+)?\n",
-    "image": r"!\[\[([\w\s\.]+)\]\]",
-    "math": r"\$([^\s][^\$]+)\$",
-    "math_block": r"\${2}([^\$]+)\${2}",
-    "inline_card": r"-?(.+)::([^\^]+)\^?(\d+)?",
-    "inline_reverse_card": r"-?(.+):::([^\^]+)\^?(\d+)?"
-}
+precompiled = dict(
+    properties="---",
+    deck=r"cards-deck: ([\w:\-_\s]+)",
+    tags=r"^- ([\w/]+)",
+    question=r"^>\[!question]-?\s*(.+)(#card)",
+    answer=r"^>(.*)(?<!\#card)$",
+    id=r"<!--ID: (\d+)-->|\^(\d+)\n",
+    empty_line=r"^(\s+)?\n",
+    image=r"!\[\[([\w\s\.]+)\]\]",
+    math=r"\$(?! |\.)([^\$]+)\$",
+    math_block=r"\${2}([^\$]+)\${2}",
+    inline_card=r"-?(.+)::([^\^]+)\^?(\d+)?",
+    inline_reverse_card=r"-?(.+):::([^\^]+)\^?(\d+)?"
+)
 
 id_format = "^{}\n"
 inline_id_format = "{} ^{}\n"
@@ -149,8 +149,8 @@ def format_images(text: str) -> str:
     image_re = re.compile(precompiled["image"])
 
     # format lines
-    if image_re.search(text):
-        text = text.replace("![[", "<img src=\"", 1).replace("]]", "\">", 1)
+    for expr in image_re.findall(text):
+        text = image_re.sub(f"<img src=\"{expr}\">", text, count=1)
 
     return text
 
@@ -164,10 +164,10 @@ def format_math(text: str) -> str:
 
     # format lines
     for expr in math_block_re.findall(text):
-        text = math_block_re.sub(f"<anki-mathjax block=true>{expr}</anki-mathjax>", text)
+        text = math_block_re.sub(rf"<anki-mathjax block=true>{repr(expr)[1:-1]}</anki-mathjax>", text, count=1)
 
     for expr in math_re.findall(text):
-        text = math_re.sub(f"<anki-mathjax>{expr}</anki-mathjax>", text)
+        text = math_re.sub(rf"<anki-mathjax>{repr(expr)[1:-1]}</anki-mathjax>", text, count=1)
 
     return text
 

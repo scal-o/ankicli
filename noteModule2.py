@@ -84,9 +84,6 @@ class NoteSet:
         df[["front", "back"]] = df[["front", "back"]].map(parseModule.format_images)
         df[["front", "back"]] = df[["front", "back"]].map(parseModule.format_math)
 
-        df[["front", "back"]] = df[["front", "back"]].map(parseModule.format_images)
-        df[["front", "back"]] = df[["front", "back"]].map(parseModule.format_math)
-
         # create field column
         logger.debug("Creating fields column")
         df.loc[df["is_card"] == True, "fields"] = df.apply(lambda x: {"Front": x.front, "Back": x.back}, axis=1)
