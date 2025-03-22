@@ -2,6 +2,8 @@
 module defining a mistune plugin for inline images
 '''
 
+im_list = []
+
 # inline image pattern
 INLINE_IMG_PATTERN = r"!\[\[(?P<img_src>[\w\s\.]+)\]\]"
 
@@ -9,6 +11,9 @@ INLINE_IMG_PATTERN = r"!\[\[(?P<img_src>[\w\s\.]+)\]\]"
 def parse_inline_img(inline, m, state):
     img_src = m.group('img_src')
     state.append_token({'type': 'inline_img', 'raw': img_src})
+    
+    # append image source to list
+    im_list.append(img_src)
     
     # return end position of parsed text
     return m.end()
