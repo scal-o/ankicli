@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import yaml
 
 """Module to handle parsing of text files"""
 
@@ -25,8 +26,6 @@ logger.addHandler(handler)
 # define a list of options used to compile the regular expressions throughout the module
 precompiled = dict(
     properties="---",
-    deck=r"cards-deck: ([\w:\-_\s]+)",
-    tags=r"^- ([\w/]+)",
     question=r"^>\[!question]-?\s*(.+)(#card)",
     answer=r"^>(.*)(?<!\#card)$",
     id=r"<!--ID: (\d+)-->|\^(\d+)\n",
@@ -68,30 +67,60 @@ def extract_properties(lines: list) -> tuple[list, list]:
     return properties, lines
 
 
-def get_deck(properties) -> str:
+def get_properties_metadata(properties: list) -> dict:
+    """Function that takes the properties yaml frontmatter as input and returns a dictionary 
+    containing the file's metadata as key-value pairs."""
 
-    # compile the regex expression before using it
-    deck_re = re.compile(precompiled["deck"])
+    # join file lines as a single string
+    prop_string = "".join(properties[:-1])
+    
+    # read file metadata
+    d = yaml.safe_load(prop_string)
 
-    # extract the deck from the yaml frontmatter
-    deck = [deck_re.search(line)[1] for line in properties if deck_re.search(line) is not None]
+    return d
 
-    # if no deck name is defined, return none (or maybe default with a warning?)
-    if len(deck) == 0:
-        return None
+
+def get_deck(metadata: dict) -> str:
+    """Wrapper around dict.get to extract deck name from file metadata."""
+    
+    deck = metadata.get("deck", None)
+    
+    # return deck name as a string, raise an Exception in case of failure
+    if isinstance(deck, str):
+        return deck
+
+    elif deck is None:
+        raise ValueError(
+            "\nError in reading the yaml frontmatter:\n"
+            f"expected 'deck' as Str, got {None}\n"
+        )
+
     else:
-        return deck[0]
+        raise TypeError(
+            "\nError in reading the yaml frontmatter:\n"
+            f"expected 'deck' as Str, got {type(deck)}\n"
+            )
+        
+    
 
 
-def get_tags(properties) -> list:
+def get_tags(metadata: dict) -> list:
+    """Wrapper around dict.get to extract tag list from file metadata."""
 
-    # compile the regex expression before using it
-    tags_re = re.compile(precompiled["tags"])
+    tags = metadata.get("tags", list())
 
-    # extract the tags from the yaml frontmatter
-    tags = [tags_re.search(line)[1].replace("/", "::") for line in properties if tags_re.search(line) is not None]
+    # try to return a list of tags, raise an Exception in case of failure
+    if isinstance(tags, list):
+        return tags
 
-    return tags
+    elif isinstance(tags, str):
+        return [tags]
+
+    else:
+        raise TypeError(
+            "\nError in reading the yaml frontmatter:\n"
+            f"expected 'tags' as Str or List, got {type(tags)}\n"
+            )
 
 
 def scrape_images(line: str, filepath: str) -> list:
