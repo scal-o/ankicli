@@ -1,11 +1,12 @@
 import copy
-import os
+import logging
 import re
 import sys
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-import logging
-from pathlib import Path
+
 """Module to handle parsing of text files"""
 
 # set up logger
@@ -65,21 +66,6 @@ def extract_properties(lines: list) -> tuple[list, list]:
     lines = lines[indexes[1]:]
 
     return properties, lines
-
-
-def get_properties(lines: list) -> tuple[list, list]:
-    """Function that retrieves all the lines that make up the yaml properties frontmatter"""
-
-    # compiles the regex expression before using it
-    properties_re = re.compile(precompiled["properties"])
-
-    # gets initial and final indices of the yaml frontmatter
-    properties_indexes = [i for i, j in enumerate(lines) if properties_re.search(j) is not None]
-    properties_indexes[1] += 1
-    # gets properties text from file lines
-    properties = [j.strip() for i, j in enumerate(lines) if i in range(properties_indexes[0], properties_indexes[1])]
-
-    return properties, properties_indexes
 
 
 def get_deck(properties) -> str:
