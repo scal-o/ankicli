@@ -48,10 +48,10 @@ class NoteSet:
 
         # assign deckName and common tags as found in the yaml frontmatter (properties)
         logger.debug("Parsing deck and tags info from file yaml frontmatter")
-        strip_props = [line.strip() for line in properties]
+        metadata = parseModule.get_properties_metadata(properties)
 
-        nset.deckName = parseModule.get_deck(strip_props)
-        nset.tags = parseModule.get_tags(strip_props)
+        nset.deckName = parseModule.get_deck(metadata)
+        nset.tags = parseModule.get_tags(metadata)
 
         # group file lines and create pandas.Series and pandas.DataFrame
         grouped_lines = parseModule.group_lines(lines)
