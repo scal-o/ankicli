@@ -1,12 +1,14 @@
+import pandas as pd
 import pytest
 
 from python.parseModule import (
-    get_lines,
     extract_properties,
-    get_properties_metadata,
     get_deck,
+    get_lines,
+    get_properties_metadata,
     get_tags,
     group_lines,
+    parse_card,
 )
 
 
@@ -140,3 +142,165 @@ def test_group_lines_all_matches():
 
     # Compare the actual output to the expected output
     assert grouped_lines == expected_groups
+
+
+def test_parse_card_basic():
+    # Define a list of lines for a basic card
+    lines = [
+        ">[!question]- What is the capital of France? #card\n",
+        "> Paris\n",
+        "<!--ID: 1-->\n"
+    ]
+
+    # Define the expected output
+    expected_series = pd.Series([
+        "What is the capital of France?",
+        "Paris",
+        1,
+        False,
+        "Basic",
+        True
+    ], index=["front", "back", "id", "inline", "modelName", "is_card"])
+
+    # Parse the card using the function
+    result = parse_card(lines)
+
+    # Compare the actual output to the expected output
+    pd.testing.assert_series_equal(result, expected_series)
+
+
+def test_parse_card_inline():
+    # Define a list of lines for an inline card
+    lines = [
+        "What is the capital of France?::Paris^1\n"
+    ]
+
+    # Define the expected output
+    expected_series = pd.Series([
+        "What is the capital of France?",
+        "Paris",
+        1,
+        True,
+        "Basic",
+        True
+    ], index=["front", "back", "id", "inline", "modelName", "is_card"])
+
+    # Parse the card using the function
+    result = parse_card(lines)
+
+    # Compare the actual output to the expected output
+    pd.testing.assert_series_equal(result, expected_series)
+
+
+def test_parse_card_inline_reverse():
+    # Define a list of lines for an inline card
+    lines = [
+        "What is the capital of France?:::Paris^1\n"
+    ]
+
+    # Define the expected output
+    expected_series = pd.Series([
+        "What is the capital of France?",
+        "Paris",
+        1,
+        True,
+        "Basic (and reversed card)",
+        True
+    ], index=["front", "back", "id", "inline", "modelName", "is_card"])
+
+    # Parse the card using the function
+    result = parse_card(lines)
+
+    # Compare the actual output to the expected output
+    pd.testing.assert_series_equal(result, expected_series)
+
+
+def test_parse_card_empty():
+    # Test with return_empty set to True
+    result = parse_card([], return_empty=True)
+
+    # Define the expected output
+    expected_series = pd.Series([
+        "",
+        "",
+        None,
+        False,
+        "Basic",
+        False
+    ], index=["front", "back", "id", "inline", "modelName", "is_card"])
+
+    # Compare the actual output to the expected output
+    pd.testing.assert_series_equal(result, expected_series)
+
+
+def test_parse_card_no_id():
+    # Define a list of lines for an incomplete card
+    lines = [
+        ">[!question]- What is the capital of France? #card\n",
+        "> Paris\n",
+    ]
+
+    # Define the expected output
+    expected_series = pd.Series([
+        "What is the capital of France?",
+        "Paris",
+        None,
+        False,
+        "Basic",
+        True
+    ], index=["front", "back", "id", "inline", "modelName", "is_card"])
+
+    # Parse the card using the function
+    result = parse_card(lines)
+
+    # Compare the actual output to the expected output
+    pd.testing.assert_series_equal(result, expected_series)
+
+
+def test_parse_card_inline_no_id():
+    # Define a list of lines for an inline card
+    lines = [
+        "What is the capital of France?::Paris\n"
+    ]
+
+    # Define the expected output
+    expected_series = pd.Series([
+        "What is the capital of France?",
+        "Paris",
+        None,
+        True,
+        "Basic",
+        True
+    ], index=["front", "back", "id", "inline", "modelName", "is_card"])
+
+    # Parse the card using the function
+    result = parse_card(lines)
+
+    # Compare the actual output to the expected output
+    pd.testing.assert_series_equal(result, expected_series)
+    
+
+def test_parse_card_mixed_content():
+    # Define a list of lines with mixed content
+    lines = [
+        "Random text\n",
+        ">[!question]- What is the capital of France? #card\n",
+        "> Paris\n",
+        "More random text\n"
+    ]
+
+    # Define the expected output
+    expected_series = pd.Series([
+        "What is the capital of France?",
+        "Paris",
+        None,
+        False,
+        "Basic",
+        True
+    ], index=["front", "back", "id", "inline", "modelName", "is_card"])
+
+    # Parse the card using the function
+    result = parse_card(lines)
+
+    # Compare the actual output to the expected output
+    pd.testing.assert_series_equal(result, expected_series)
