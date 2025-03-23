@@ -214,7 +214,7 @@ def group_lines(lines: list) -> list[list]:
 
 def parse_card(lines: list, return_empty=False) -> pd.Series:
     """Returns a pandas.Series object corresponding to a single card. The Series object has the following fields
-    (indexes): front, back, id, inline, model."""
+    (indexes): front, back, id, inline, modelName, is_card."""
 
     question_re = re.compile(precompiled["question"])
     answer_re = re.compile(precompiled["answer"])
@@ -254,22 +254,18 @@ def parse_card(lines: list, return_empty=False) -> pd.Series:
 
         # normal card parser
         if (r := question_re.search(line)) is not None:
-            front = r.group(1)
+            front = r.group(1).strip()
             is_card = True
         elif answer_re.search(line) is not None:
             if back is None:
-                back = line.strip(">")
+                back = line.strip(">").strip()
             else:
-                back += line.strip(">")
+                back += line.strip(">").strip()
         elif (r := id_re.search(line)) is not None:
             id = [int(group) for group in r.groups() if group is not None][0]
         elif empty_line_re.search(line) is not None:
             if front is not None and back is not None:
-                back = back.replace("\n", "<br />")
                 return pd.Series([front, back, id, inline, model, is_card], index=index_names)
-    # repeat check at end of file
-    if front is not None and back is not None:
-        back = back.replace("\n", "<br />")
 
     return pd.Series([front, back, id, inline, model, is_card], index=index_names)
 
