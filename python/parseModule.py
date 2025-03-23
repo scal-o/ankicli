@@ -25,7 +25,7 @@ logger.addHandler(handler)
 
 # define a list of options used to compile the regular expressions throughout the module
 precompiled = dict(
-    properties="---",
+    properties="^---$|^...$",
     question=r"^>\[!question]-?\s*(.+)(#card)",
     answer=r"^>(.*)(?<!\#card)$",
     id=r"<!--ID: (\d+)-->|\^(\d+)\n",
