@@ -79,4 +79,3 @@ def test_image_not_found():
     # Check that trying to render the Markdown as HTML raises a FileNotFoundError
     with pytest.raises(FileNotFoundError):
         markdown(md_text)
-    
