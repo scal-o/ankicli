@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from python.parseModule import (
+from src.parseModule import (
     extract_properties,
     get_deck,
     get_lines,

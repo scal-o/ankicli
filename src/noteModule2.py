@@ -6,6 +6,7 @@ import numpy as np
 import logging
 import json
 from requestModule import request_action
+from img_plugin import im_list
 
 # set up logger
 logger = logging.getLogger(__name__)
