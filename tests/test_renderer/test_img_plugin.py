@@ -1,9 +1,15 @@
 from pathlib import Path
 
+import mistune
 import pytest
 
-from src.img_plugin import im_list
-from src.rendererModule import markdown
+from src.img_plugin import im_list, img
+
+# Initialize the Mistune Markdown instance with the math plugin
+renderer = mistune.HTMLRenderer()
+markdown = mistune.Markdown(renderer=renderer)
+markdown.use(img)
+
 
 ## Tests for the img plugin
 
