@@ -51,9 +51,7 @@ def render_inline_img(renderer, text):
 
 # image plugin
 def img(md):
-    md.inline.register(
-        "inline_img", INLINE_IMG_PATTERN, parse_inline_img, before="link"
-    )
+    md.inline.register("inline_img", INLINE_IMG_PATTERN, parse_inline_img, before="link")
 
     if md.renderer and md.renderer.NAME == "html":
         md.renderer.register("inline_img", render_inline_img)
