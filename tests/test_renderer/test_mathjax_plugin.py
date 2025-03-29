@@ -42,18 +42,26 @@ def test_invalid_spaces():
     # Define a Markdown string with an invalid math expression (spaces after / before $)
     md_text1 = "This is a paragraph with an invalid math expression: $$ E=mc^2$$."
     md_text2 = "This is a paragraph with an invalid math expression: $$E=mc^2 $$."
+    md_text3 = "This is a paragraph with an invalid math expression: $ E=mc^2$."
+    md_text4 = "This is a paragraph with an invalid math expression: $E=mc^2 $."
 
     # Render the Markdown to HTML
     html_output1 = markdown(md_text1)
     html_output2 = markdown(md_text2)
+    html_output3 = markdown(md_text3)
+    html_output4 = markdown(md_text4)
 
     # Define the expected HTML output
     expected_html1 = "<p>This is a paragraph with an invalid math expression: $$ E=mc^2$$.</p>\n"
     expected_html2 = "<p>This is a paragraph with an invalid math expression: $$E=mc^2 $$.</p>\n"
+    expected_html3 = "<p>This is a paragraph with an invalid math expression: $ E=mc^2$.</p>\n"
+    expected_html4 = "<p>This is a paragraph with an invalid math expression: $E=mc^2 $.</p>\n"
 
     # Check if the output matches the expected HTML
     assert html_output1 == expected_html1
     assert html_output2 == expected_html2
+    assert html_output3 == expected_html3
+    assert html_output4 == expected_html4
 
 
 def test_basic_inline_math():
