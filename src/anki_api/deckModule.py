@@ -1,4 +1,5 @@
-import requestModule
+from . import requestModule
+
 """Module to handle deck-related requests, like deck creation, deletion, etc"""
 
 
