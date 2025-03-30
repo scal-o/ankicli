@@ -176,10 +176,10 @@ def parse_card(lines: list, return_empty=False) -> pd.Series:
             front = r.group("question_text")
             is_card = True
         elif (r := answer_re.search(line)) is not None:
-            if back is None:
+            if back == "":
                 back = r.group("answer_text")
             else:
-                back = r.group("answer_text")
+                back += "\n" + r.group("answer_text")
         elif (r := id_re.search(line)) is not None:
             id = int(r.group("id"))
         elif empty_line_re.search(line) is not None:

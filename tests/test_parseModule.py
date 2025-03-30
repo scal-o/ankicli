@@ -170,6 +170,28 @@ def test_parse_card_basic():
     pd.testing.assert_series_equal(result, expected_series)
 
 
+def test_parse_multiline_card_basic():
+    # Define a list of lines for a basic card
+    lines = [
+        ">[!question]- What is the capital of France? #card\n",
+        "> Paris\n",
+        "> or maybe Rome?\n",
+        "<!--ID: 1-->\n",
+    ]
+
+    # Define the expected output
+    expected_series = pd.Series(
+        ["What is the capital of France?", "Paris\nor maybe Rome?", 1, False, "Basic", True],
+        index=["front", "back", "id", "inline", "modelName", "is_card"],
+    )
+
+    # Parse the card using the function
+    result = parse_card(lines)
+
+    # Compare the actual output to the expected output
+    pd.testing.assert_series_equal(result, expected_series)
+
+
 def test_parse_card_inline():
     # Define a list of lines for an inline card
     lines = [">What is the capital of France?::Paris^1\n"]
