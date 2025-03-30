@@ -1,0 +1,14 @@
+question_identifiers:
+    start: ">[ \\t]*?\\[!question]-?"
+    end: "\\#card"
+
+answer_identifiers:
+    start: ">"
+    end: "(?<!\\#card)"
+  
+inline_identifiers:
+    basic: "::"
+    reversed: ":::"
+    start: "-|>"
+    end: ""
+  
