@@ -86,22 +86,22 @@ def test_group_lines():
     lines = [
         "This is a regular line.\n",
         "Another regular line.\n",
-        "Inline card content::example^1\n",  # Matches inline_card pattern
+        ">Inline card content::example^1\n",  # Matches inline_card pattern
         "\n",  # Empty line
         "More regular text.\n",
         "Yet another line.\n",
         "\n",  # Another empty line
-        "Final line with inline card::example^2\n",  # Matches inline_card pattern
+        ">Final line with inline card::example^2\n",  # Matches inline_card pattern
     ]
 
     # Define the expected output
     expected_groups = [
         ["This is a regular line.\n", "Another regular line.\n"],
-        ["Inline card content::example^1\n"],
+        [">Inline card content::example^1\n"],
         ["\n"],
         ["More regular text.\n", "Yet another line.\n"],
         ["\n"],
-        ["Final line with inline card::example^2\n"],
+        [">Final line with inline card::example^2\n"],
     ]
 
     # Group lines using the function
@@ -172,7 +172,7 @@ def test_parse_card_basic():
 
 def test_parse_card_inline():
     # Define a list of lines for an inline card
-    lines = ["What is the capital of France?::Paris^1\n"]
+    lines = [">What is the capital of France?::Paris^1\n"]
 
     # Define the expected output
     expected_series = pd.Series(
@@ -189,7 +189,7 @@ def test_parse_card_inline():
 
 def test_parse_card_inline_reverse():
     # Define a list of lines for an inline card
-    lines = ["What is the capital of France?:::Paris^1\n"]
+    lines = [">What is the capital of France?:::Paris^1\n"]
 
     # Define the expected output
     expected_series = pd.Series(
@@ -247,7 +247,7 @@ def test_parse_card_no_id():
 
 def test_parse_card_inline_no_id():
     # Define a list of lines for an inline card
-    lines = ["What is the capital of France?::Paris\n"]
+    lines = [">What is the capital of France?::Paris\n"]
 
     # Define the expected output
     expected_series = pd.Series(
@@ -264,7 +264,6 @@ def test_parse_card_inline_no_id():
 
 def test_parse_card_mixed_content():
     # Define a list of lines with mixed content
-
     lines = [
         "Random text\n",
         ">[!question]- What is the capital of France? #card\n",
