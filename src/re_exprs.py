@@ -4,13 +4,10 @@ with open("src/config/parse_config.yaml", "r") as f:
     configs = yaml.safe_load(f)
 
 
-id = configs.get("id_identifier")
 q = configs.get("question_identifiers")
 a = configs.get("answer_identifiers")
 i = configs.get("inline_identifiers")
 
-id_n = id.get("normal")
-id_s = id.get("short")
 id_re = r"(((?P<nid><!--ID: )|(?P<sid>\^))(?P<id>\d+)(?(nid)-->|))"
 
 q_s = q.get("start", "")
