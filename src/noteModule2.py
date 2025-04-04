@@ -1,12 +1,15 @@
-import sys
-import deckModule
-import parseModule
-import pandas as pd
-import numpy as np
-import logging
 import json
-from requestModule import request_action
-from img_plugin import im_list
+import logging
+import sys
+
+import numpy as np
+import pandas as pd
+
+from . import parseModule
+from .anki_api import deckModule
+from .anki_api.requestModule import request_action
+from .renderer.img_plugin import im_list
+from .renderer.rendererModule import markdown
 
 # set up logger
 logger = logging.getLogger(__name__)
@@ -15,14 +18,13 @@ logger.setLevel(logging.WARNING)
 debug_handler = logging.StreamHandler(stream=sys.stdout)
 debug_handler.setLevel(logging.DEBUG)
 
-formatter = logging.Formatter('%(name)s::%(levelname)s - %(message)s')
+formatter = logging.Formatter("%(name)s::%(levelname)s - %(message)s")
 debug_handler.setFormatter(formatter)
 
 logger.addHandler(debug_handler)
 
 
 class NoteSet:
-
     def __init__(self):
         self.deckName = None
         self.tags = None
@@ -56,8 +58,8 @@ class NoteSet:
 
         # group file lines and create pandas.Series and pandas.DataFrame
         grouped_lines = parseModule.group_lines(lines)
-        grouped_lines = pd.Series(grouped_lines)
-        grouped_lines = pd.DataFrame(grouped_lines, columns=["text"])
+        grouped_lines = pd.Series(grouped_lines, name="text")
+        grouped_lines = pd.DataFrame(grouped_lines)
 
         # create and fill pandas.DataFrame with the card information
         logger.debug("Parsing cards from file lines")
@@ -65,29 +67,27 @@ class NoteSet:
         df = pd.concat([grouped_lines, df], axis=1)
 
         # add properties to the DataFrame
-        properties = pd.Series([properties])
-        properties = pd.DataFrame(properties, columns=["text"])
+        properties = pd.Series([properties], name="text")
+        properties = pd.DataFrame(properties)
+
         tmp_prop = properties.text.apply(parseModule.parse_card, return_empty=True)
         properties = pd.concat([properties, tmp_prop], axis=1)
 
         df = pd.concat([properties, df], ignore_index=True)
 
-        # scrape images from file lines
-        logger.debug("Scraping images from file lines")
-        fr_im = df.front.apply(parseModule.scrape_images, filepath=nset.file_path)
-        bk_im = df.back.apply(parseModule.scrape_images, filepath=nset.file_path)
-        images = fr_im + bk_im
-        images = [im for im_list in images for im in im_list]
-        nset.media = images
-
         # format front and back of cards
         logger.debug("Formatting front and back text")
-        df[["front", "back"]] = df[["front", "back"]].map(parseModule.format_images)
-        df[["front", "back"]] = df[["front", "back"]].map(parseModule.format_math)
+        df[["front", "back"]] = df[["front", "back"]].map(markdown)
+
+        # add media
+        logger.debug("Scraping images from file lines")
+        nset.media = im_list.copy()
 
         # create field column
         logger.debug("Creating fields column")
-        df.loc[df["is_card"] == True, "fields"] = df.apply(lambda x: {"Front": x.front, "Back": x.back}, axis=1)
+        df.loc[df["is_card"], "fields"] = df.apply(
+            lambda x: {"Front": x.front, "Back": x.back}, axis=1
+        )
 
         # add tags and deck info to cards
         logger.debug("Adding tags and deck info")
