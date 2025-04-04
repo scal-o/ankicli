@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from src.re_exprs import precompiled
+from .re_exprs import precompiled
 
 """Module to handle parsing of text files"""
 
@@ -169,7 +169,9 @@ def parse_card(lines: list, return_empty=False) -> pd.Series:
             id = int(r.group("id")) if r.group("id") is not None else None
             inline = True
             is_card = True
-            return pd.Series([front, back, id, inline, model, is_card], index=index_names)
+            return pd.Series(
+                [front, back, id, inline, model, is_card], index=index_names
+            )
 
         # normal card parser
         if (r := question_re.search(line)) is not None:
@@ -184,7 +186,9 @@ def parse_card(lines: list, return_empty=False) -> pd.Series:
             id = int(r.group("id"))
         elif empty_line_re.search(line) is not None:
             if front is not None and back is not None:
-                return pd.Series([front, back, id, inline, model, is_card], index=index_names)
+                return pd.Series(
+                    [front, back, id, inline, model, is_card], index=index_names
+                )
 
     return pd.Series([front, back, id, inline, model, is_card], index=index_names)
 
@@ -228,7 +232,9 @@ def card_gen(lines, deck=None, tags=None):
             else:
                 card_dict["Back"] += line.strip(">")
         elif (r := id_re.search(line)) is not None:
-            card_dict["id"] = [int(group) for group in r.groups() if group is not None][0]
+            card_dict["id"] = [int(group) for group in r.groups() if group is not None][
+                0
+            ]
         elif empty_line_re.search(line) is not None:
             if card_dict["Front"] is not None and card_dict["Back"] is not None:
                 card_dict["Back"] = card_dict["Back"].replace("\n", "<br />")

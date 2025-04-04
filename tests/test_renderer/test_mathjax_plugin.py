@@ -1,6 +1,5 @@
 import mistune
-
-from src.mathjax_plugin import mathjax
+from src.renderer.mathjax_plugin import mathjax
 
 # Initialize the Mistune Markdown instance with the math plugin
 renderer = mistune.HTMLRenderer()
@@ -32,7 +31,9 @@ def test_invalid_dollar_sequences():
     html_output = markdown(md_text)
 
     # Define the expected HTML output
-    expected_html = "<p>This is a paragraph with an invalid math expression: $$E=mc^2$.</p>\n"
+    expected_html = (
+        "<p>This is a paragraph with an invalid math expression: $$E=mc^2$.</p>\n"
+    )
 
     # Check if the output matches the expected HTML
     assert html_output == expected_html
@@ -52,10 +53,18 @@ def test_invalid_spaces():
     html_output4 = markdown(md_text4)
 
     # Define the expected HTML output
-    expected_html1 = "<p>This is a paragraph with an invalid math expression: $$ E=mc^2$$.</p>\n"
-    expected_html2 = "<p>This is a paragraph with an invalid math expression: $$E=mc^2 $$.</p>\n"
-    expected_html3 = "<p>This is a paragraph with an invalid math expression: $ E=mc^2$.</p>\n"
-    expected_html4 = "<p>This is a paragraph with an invalid math expression: $E=mc^2 $.</p>\n"
+    expected_html1 = (
+        "<p>This is a paragraph with an invalid math expression: $$ E=mc^2$$.</p>\n"
+    )
+    expected_html2 = (
+        "<p>This is a paragraph with an invalid math expression: $$E=mc^2 $$.</p>\n"
+    )
+    expected_html3 = (
+        "<p>This is a paragraph with an invalid math expression: $ E=mc^2$.</p>\n"
+    )
+    expected_html4 = (
+        "<p>This is a paragraph with an invalid math expression: $E=mc^2 $.</p>\n"
+    )
 
     # Check if the output matches the expected HTML
     assert html_output1 == expected_html1
@@ -100,9 +109,7 @@ def test_basic_block_math():
     html_output = markdown(md_text)
 
     # Define the expected HTML output
-    expected_html = (
-        "<p>Here is a block math expression:<div><anki-mathjax>E=mc^2</anki-mathjax></div></p>\n"
-    )
+    expected_html = "<p>Here is a block math expression:<div><anki-mathjax>E=mc^2</anki-mathjax></div></p>\n"
 
     # Check if the output matches the expected HTML
     assert html_output == expected_html

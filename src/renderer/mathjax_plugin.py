@@ -39,8 +39,12 @@ def render_block_mathjax(renderer, text):
 
 # image plugin
 def mathjax(md):
-    md.inline.register("inline_math", INLINE_MATHJAX_PATTERN, parse_inline_mathjax, before="link")
-    md.inline.register("block_math", BLOCK_MATHJAX_PATTERN, parse_block_mathjax, before="link")
+    md.inline.register(
+        "inline_math", INLINE_MATHJAX_PATTERN, parse_inline_mathjax, before="link"
+    )
+    md.inline.register(
+        "block_math", BLOCK_MATHJAX_PATTERN, parse_block_mathjax, before="link"
+    )
 
     if md.renderer and md.renderer.NAME == "html":
         md.renderer.register("inline_math", render_inline_mathjax)

@@ -181,7 +181,14 @@ def test_parse_multiline_card_basic():
 
     # Define the expected output
     expected_series = pd.Series(
-        ["What is the capital of France?", "Paris\nor maybe Rome?", 1, False, "Basic", True],
+        [
+            "What is the capital of France?",
+            "Paris\nor maybe Rome?",
+            1,
+            False,
+            "Basic",
+            True,
+        ],
         index=["front", "back", "id", "inline", "modelName", "is_card"],
     )
 

@@ -1,7 +1,8 @@
 import json
-import requests
 import os
 import time
+
+import requests
 
 """Module containing low-level request handlers for the ankiConnect HTTP server"""
 
@@ -30,18 +31,23 @@ def check_connection(url=link):
             return True
         else:
             os.environ["AnkiConnection"] = "0"
-            raise Exception(f"Connection to ankiConnect unsuccessful. Expected response: {check_string}.n"
-                            f"Actual response: {r.text}")
+            raise Exception(
+                f"Connection to ankiConnect unsuccessful. Expected response: {check_string}.n"
+                f"Actual response: {r.text}"
+            )
 
     except Exception as er:
         os.environ["AnkiConnection"] = "0"
-        print("The connection was refused from the server. Check that Anki is open and AnkiConnect is installed.")
+        print(
+            "The connection was refused from the server. Check that Anki is open and AnkiConnect is installed."
+        )
         print(f"Exception: {er}")
         return False
 
 
 def ensure_connectivity(func):
     """Decorator used to check connection before read/write operations"""
+
     def wrapper(*args, **kwargs):
         if check_connection() is True:
             if len(kwargs) == 0:
@@ -50,6 +56,7 @@ def ensure_connectivity(func):
                 return func(*args, **kwargs)
         else:
             print("Operation aborted.")
+
     return wrapper
 
 
@@ -74,7 +81,7 @@ def check_result(response):
     elif "result" not in response.keys():
         raise KeyError("Response is missing required result field")
     elif response["error"] is not None:
-        raise Exception(f"Server returned error: {response["error"]}")
+        raise Exception(f"Server returned error: {response['error']}")
 
 
 @ensure_connectivity

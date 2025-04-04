@@ -58,6 +58,8 @@ def delete_deck(name, force=False):
     cards_n = get_deck_cards_n(name)
 
     if cards_n != 0 and force is False:
-        print(f"Deck '{name}' is not empty. To delete it, call this function with force=True")
+        print(
+            f"Deck '{name}' is not empty. To delete it, call this function with force=True"
+        )
     else:
         requestModule.request_action("deleteDecks", decks=[name], cardsToo=True)

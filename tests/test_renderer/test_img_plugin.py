@@ -2,8 +2,7 @@ from pathlib import Path
 
 import mistune
 import pytest
-
-from src.img_plugin import im_list, img
+from src.renderer.img_plugin import im_list, img
 
 # Initialize the Mistune Markdown instance with the math plugin
 renderer = mistune.HTMLRenderer()
@@ -43,7 +42,9 @@ def test_multiple_inline_images():
     html_output = markdown(md_text)
 
     # Define the expected HTML output
-    expected_html = '<p>Image 1: <img src="image1.png"> and Image 2: <img src="image2.png"></p>\n'
+    expected_html = (
+        '<p>Image 1: <img src="image1.png"> and Image 2: <img src="image2.png"></p>\n'
+    )
 
     # Check if the output matches the expected HTML
     assert html_output == expected_html

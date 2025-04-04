@@ -1,4 +1,5 @@
-import requestModule
+from .anki_api import requestModule
+
 """Module to handle module-related requests"""
 
 
@@ -14,7 +15,9 @@ def get_model_names():
 def get_model_fields(model_name):
     """Low -level function to gather available fields for a modelName"""
 
-    result = requestModule.request_action("modelFieldNames", modelName=model_name)["result"]
+    result = requestModule.request_action("modelFieldNames", modelName=model_name)[
+        "result"
+    ]
     return result
 
 
