@@ -99,7 +99,7 @@ def request_action(action, url=link, version=6, **kwargs):
         print(f"Error in request_action: {er}")
         response = {"result": None, "error": er}
     except Exception as er:
-        print(f"Action '{action}' unsuccessful. Exception raised:")
-        print(er)
+        print(f"Action '{action}' unsuccessful. Exception raised: {er}")
+        response = {"result": None, "error": er}
 
     return response
