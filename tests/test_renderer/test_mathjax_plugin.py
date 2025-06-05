@@ -1,5 +1,5 @@
 import mistune
-from src.renderer.mathjax_plugin import mathjax
+from ankicli.renderer.mathjax_plugin import mathjax
 
 # Initialize the Mistune Markdown instance with the math plugin
 renderer = mistune.HTMLRenderer()

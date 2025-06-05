@@ -1,7 +1,7 @@
 from unittest.mock import patch
 
 import pytest
-from src.anki_api.requestModule import (
+from ankicli.anki_api.requestModule import (
     check_connection,
     check_result,
     create_request,
@@ -20,7 +20,7 @@ def setup_environment():
 
 def test_check_connection_success(requests_mock):
     # Mock the AnkiConnect server response
-    requests_mock.get("http://127.0.0.1:8765", text="AnkiConnect v.6")
+    requests_mock.get("http://127.0.0.1:8765", text='{"apiVersion": "AnkiConnect v.6"}')
 
     # Test the connection check
     assert check_connection() is True
@@ -39,10 +39,10 @@ def test_ensure_connectivity_decorator():
     def dummy_function():
         return "Success"
 
-    with patch("src.anki_api.requestModule.check_connection", return_value=True):
+    with patch("ankicli.anki_api.requestModule.check_connection", return_value=True):
         assert dummy_function() == "Success"
 
-    with patch("src.anki_api.requestModule.check_connection", return_value=False):
+    with patch("ankicli.anki_api.requestModule.check_connection", return_value=False):
         assert dummy_function() is None
 
 
@@ -107,7 +107,7 @@ def test_request_action_success(requests_mock):
 
     # Test the full request action
     # Use path to simulate active AnkiConnect server
-    with patch("src.anki_api.requestModule.check_connection", return_value=True):
+    with patch("ankicli.anki_api.requestModule.check_connection", return_value=True):
         response = request_action("testAction", param1="value1")
 
     assert response == {"result": "Success", "error": None}
@@ -119,7 +119,7 @@ def test_request_action_invalid_response(requests_mock):
 
     # Test the full request action with an invalid response
     # Use path to simulate active AnkiConnect server
-    with patch("src.anki_api.requestModule.check_connection", return_value=True):
+    with patch("ankicli.anki_api.requestModule.check_connection", return_value=True):
         response = request_action("testAction", param1="value1")
 
     assert response["error"] is not None
@@ -132,7 +132,7 @@ def test_request_action_invalid_result(requests_mock):
 
     # Test the full request action with an invalid response
     # Use path to simulate active AnkiConnect server
-    with patch("src.anki_api.requestModule.check_connection", return_value=True):
+    with patch("ankicli.anki_api.requestModule.check_connection", return_value=True):
         response = request_action("testAction", param1="value1")
 
     assert response["error"] is not None
@@ -145,7 +145,7 @@ def test_request_action_invalid_error(requests_mock):
 
     # Test the full request action with an invalid response
     # Use path to simulate active AnkiConnect server
-    with patch("src.anki_api.requestModule.check_connection", return_value=True):
+    with patch("ankicli.anki_api.requestModule.check_connection", return_value=True):
         response = request_action("testAction", param1="value1")
 
     assert response["error"] is not None
@@ -160,7 +160,7 @@ def test_request_action_server_error(requests_mock):
 
     # Test the full request action with a server error
     # Use path to simulate active AnkiConnect server
-    with patch("src.anki_api.requestModule.check_connection", return_value=True):
+    with patch("ankicli.anki_api.requestModule.check_connection", return_value=True):
         response = request_action("testAction", param1="value1")
 
     assert response["error"] is not None

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import mistune
 import pytest
-from src.renderer.img_plugin import im_list, img
+from ankicli.renderer.img_plugin import im_list, img
 
 # Initialize the Mistune Markdown instance with the math plugin
 renderer = mistune.HTMLRenderer()

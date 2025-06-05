@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from src.parseModule import (
+from ankicli.parseModule import (
     extract_properties,
     get_deck,
     get_lines,
