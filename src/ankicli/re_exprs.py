@@ -1,6 +1,6 @@
 import yaml
 
-with open("src/config/parse_config.yaml", "r") as f:
+with open("src/ankicli/config/parse_config.yaml", "r") as f:
     configs = yaml.safe_load(f)
 
 
