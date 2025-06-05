@@ -1,4 +1,4 @@
-from . import requestModule
+from ankicli.anki_api import requestModule
 
 """Module to handle deck-related requests, like deck creation, deletion, etc"""
 

@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from .re_exprs import precompiled
+from ankicli.re_exprs import precompiled
 
 """Module to handle parsing of text files"""
 
@@ -72,6 +72,9 @@ def get_deck(metadata: dict) -> str:
     """Wrapper around dict.get to extract deck name from file metadata."""
 
     deck = metadata.get("deck", None)
+
+    if deck is None:
+        deck = metadata.get("cards-deck", None)
 
     # return deck name as a string, raise an Exception in case of failure
     if isinstance(deck, str):

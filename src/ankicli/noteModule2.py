@@ -5,11 +5,12 @@ import sys
 import numpy as np
 import pandas as pd
 
-from . import parseModule
-from .anki_api import deckModule
-from .anki_api.requestModule import request_action
-from .renderer.img_plugin import im_list
-from .renderer.rendererModule import markdown
+
+from ankicli import parseModule
+from ankicli.anki_api import deckModule
+from ankicli.anki_api.requestModule import request_action
+from ankicli.renderer.img_plugin import im_list
+from ankicli.renderer.rendererModule import markdown
 
 # set up logger
 logger = logging.getLogger(__name__)
@@ -205,7 +206,6 @@ class NoteSet:
         df = df.loc[(df["is_card"] == True) & (~df["id"].isna())]
 
         if not df.empty:
-
             # gather ids of existing notes
             df_ids = df["id"].map(int)
             df_ids = df_ids.to_list()
@@ -217,11 +217,15 @@ class NoteSet:
 
             # divide existing notes in various dfs
             logger.debug("Finding notes that have to be updated")
-            updatable_notes, non_updatable_notes = self.find_updatable_notes(df, queried_notes)
+            updatable_notes, non_updatable_notes = self.find_updatable_notes(
+                df, queried_notes
+            )
 
             # create list of notes from df
             logger.debug("Creating list of updatable notes")
-            nl = updatable_notes[["deckName", "modelName", "fields", "tags", "id"]].copy()
+            nl = updatable_notes[
+                ["deckName", "modelName", "fields", "tags", "id"]
+            ].copy()
             nl.id = nl.id.map(int)
             nl = nl.to_dict(orient="index")
             nl = list(nl.values())
@@ -244,7 +248,6 @@ class NoteSet:
 
         # if the df is empty, it means that no more cards have to be added to anki
         if not df.empty:
-
             # adding cards to the anki server
             logger.debug("Adding cards to server")
             df_ids = self.add_notes(df)
@@ -308,7 +311,9 @@ class NoteSet:
 
         # filter error notes keeping the duplicate ones
         logger.debug("Filtering duplicate notes from other errors")
-        dup_df = e_df.loc[e_df["error"] == "cannot create note because it is a duplicate"].copy()
+        dup_df = e_df.loc[
+            e_df["error"] == "cannot create note because it is a duplicate"
+        ].copy()
 
         # return the empty dataframe if no duplicate notes were found
         if dup_df.empty:
@@ -320,7 +325,9 @@ class NoteSet:
 
         # launch query and gather results
         logger.debug("Querying anki for the missing ids")
-        dup_ids = [request_action("findNotes", query=el)["result"][0] for el in dup_front]
+        dup_ids = [
+            request_action("findNotes", query=el)["result"][0] for el in dup_front
+        ]
 
         # insert card id in the id column and add it/sub it in the text column
         logger.debug("Inserting ids into the cards' text")
@@ -370,9 +377,14 @@ class NoteSet:
 
         # create list with important query info
         logger.debug("Building note fields from query result")
-        queried_fields = [{"Front": x["fields"]["Front"]["value"],
-                           "Back": x["fields"]["Back"]["value"]}
-                          for x in queried_notes if x is not None]
+        queried_fields = [
+            {
+                "Front": x["fields"]["Front"]["value"],
+                "Back": x["fields"]["Back"]["value"],
+            }
+            for x in queried_notes
+            if x is not None
+        ]
 
         # create updatable / up to date notes dfs
         logger.debug("Divide notes in up-to-date and updatable")
@@ -389,7 +401,6 @@ class NoteSet:
         df = df.copy()
 
         if not df.empty:
-
             # retrieve ids and deckName
             df_ids = df.id.to_list()
             deck_name = df.deckName.iloc[0]
@@ -413,19 +424,20 @@ class NoteSet:
 
     @staticmethod
     def write_to_error_log(e_df: pd.DataFrame, file="error_log.txt") -> None:
-
         logger.warning("Writing error log...")
 
         # write error log with the notes in the error df
         with open(file, "a") as f:
-            f.writelines(f"\n{json.dumps(e_df.to_dict(orient="index"))}")
+            f.writelines(f"\n{json.dumps(e_df.to_dict(orient='index'))}")
 
     def upload_media(self) -> None:
         """Method to upload media to anki server"""
 
         # upload every image to the media folder
         for file in self.media:
-            request_action("storeMediaFile", filename=file["filename"], path=file["path"])
+            request_action(
+                "storeMediaFile", filename=file["filename"], path=str(file["path"].absolute())
+            )
 
     def save_file(self) -> None:
         """Method to save the updated lines to the file"""
@@ -435,5 +447,5 @@ class NoteSet:
         lines = [line for group in lines for line in group]
 
         # write lines to file
-        with open(self.file_path, mode = "w", encoding="utf-8") as f:
+        with open(self.file_path, mode="w", encoding="utf-8") as f:
             f.writelines(lines)

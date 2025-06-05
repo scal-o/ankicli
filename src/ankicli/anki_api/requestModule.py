@@ -24,7 +24,7 @@ def check_connection(url=link):
         # checks connection to the http server by making a get request and checking its return value against the
         # hardcoded one
         r = requests.get(url=url)
-        check_string = "AnkiConnect v.6"
+        check_string = '{"apiVersion": "AnkiConnect v.6"}'
 
         if r.text == check_string:
             os.environ["AnkiConnection"] = str(time.time())

@@ -1,4 +1,4 @@
-from .anki_api import requestModule
+from ankicli.anki_api import requestModule
 
 """Module to handle module-related requests"""
 
