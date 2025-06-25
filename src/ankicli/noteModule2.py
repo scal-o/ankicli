@@ -68,11 +68,8 @@ class NoteSet:
         df = pd.concat([grouped_lines, df], axis=1)
 
         # add properties to the DataFrame
-        properties = pd.Series([properties], name="text")
-        properties = pd.DataFrame(properties)
-
-        tmp_prop = properties.text.apply(parseModule.parse_card, return_empty=True)
-        properties = pd.concat([properties, tmp_prop], axis=1)
+        properties = pd.DataFrame({'text': [properties]})
+        properties = pd.concat([properties, properties.text.apply(parseModule.parse_card, return_empty=True)], axis=1)
 
         df = pd.concat([properties, df], ignore_index=True)
 
@@ -338,7 +335,7 @@ class NoteSet:
         return dup_df.drop(["error"], axis=1)
 
     @staticmethod
-    def find_deleted_notes(df: pd.DataFrame, queried_notes):
+    def find_deleted_notes(df: pd.DataFrame, queried_notes: list) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Method to check that all the notes with an id actually exist in the anki server"""
 
         # copy dataframe
@@ -346,9 +343,11 @@ class NoteSet:
 
         # filter deleted notes
         logger.debug("Filtering deleted notes")
-        del_index = [True if el is None else False for el in queried_notes]
-        deleted_notes = df.loc[del_index].copy()
-        df = df.loc[~df.index.isin(deleted_notes.index)].copy()
+        
+        # use pandas isnull to find notes that have been deleted
+        qn = pd.Series(queried_notes, index=df.index)
+        deleted_notes = df[qn.isnull()].copy()
+        df = df[qn.notnull()].copy()
 
         return df, deleted_notes
 
@@ -386,10 +385,13 @@ class NoteSet:
             if x is not None
         ]
 
+        # transform queried_fields into a pandas Series with the same index as df
+        queried_fields = pd.Series(queried_fields, index=df.index)
+
         # create updatable / up to date notes dfs
         logger.debug("Divide notes in up-to-date and updatable")
         updatable_notes = df.loc[df.fields != queried_fields].copy()
-        up_to_date_notes = df.loc[~df.index.isin(updatable_notes.index)].copy()
+        up_to_date_notes = df.loc[df.fields == queried_fields].copy()
 
         return updatable_notes, up_to_date_notes
 
