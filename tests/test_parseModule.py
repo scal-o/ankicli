@@ -8,6 +8,7 @@ from ankicli.parseModule import (
     get_properties_metadata,
     get_tags,
     group_lines,
+    insert_card_id,
     parse_card,
 )
 
@@ -311,3 +312,84 @@ def test_parse_card_mixed_content():
 
     # Compare the actual output to the expected output
     pd.testing.assert_series_equal(result, expected_series)
+
+
+def test_insert_id_in_math_inline():
+    # Define an inline card with a caret in a math expression
+    initial_series = pd.Series(
+        [
+            [">What is the quadratic of $x$? :: $x^2$\n"],
+            "What is the quadratic of $x$?",
+            "$x^2$",
+            9999,
+            True,
+            "Basic",
+            True,
+        ],
+        index=["text", "front", "back", "id", "inline", "modelName", "is_card"],
+    )
+
+    # Define the expected output
+    expected_series = pd.Series(
+        [
+            [">What is the quadratic of $x$? :: $x^2$^9999\n"],
+            "What is the quadratic of $x$?",
+            "$x^2$",
+            9999,
+            True,
+            "Basic",
+            True,
+        ],
+        index=["text", "front", "back", "id", "inline", "modelName", "is_card"],
+    )
+
+    # Insert the card id using the function
+    result = initial_series.copy()
+    result["text"] = initial_series.apply(insert_card_id, by_row=False)
+
+    # Compare the actual output to the expected output
+    pd.testing.assert_series_equal(result, expected_series)
+
+
+def test_insert_id_in_math():
+    # Define a normal card with a caret in a math expression
+    initial_series = pd.Series(
+        [
+            [">What is the quadratic of $x$? #card\n", ">$x^2$\n"],
+            "What is the quadratic of $x$?",
+            "$x^2$",
+            9999,
+            False,
+            "Basic",
+            True,
+        ],
+        index=["text", "front", "back", "id", "inline", "modelName", "is_card"],
+    )
+
+    # Define the expected output
+    expected_series = pd.Series(
+        [
+            [">What is the quadratic of $x$? #card\n", ">$x^2$\n^9999\n"],
+            "What is the quadratic of $x$?",
+            "$x^2$",
+            9999,
+            False,
+            "Basic",
+            True,
+        ],
+        index=["text", "front", "back", "id", "inline", "modelName", "is_card"],
+    )
+
+    # Insert the card id using the function
+    result = initial_series.copy()
+    result["text"] = initial_series.apply(insert_card_id, by_row=False)
+
+    # Compare the actual output to the expected output
+    pd.testing.assert_series_equal(result, expected_series)
+
+
+# TODO add more tests for insert_card_id:
+# - inline card with id
+# - normal card with id
+# - inline card without id
+# - normal card without id

@@ -172,9 +172,7 @@ def parse_card(lines: list, return_empty=False) -> pd.Series:
             id = int(r.group("id")) if r.group("id") is not None else None
             inline = True
             is_card = True
-            return pd.Series(
-                [front, back, id, inline, model, is_card], index=index_names
-            )
+            return pd.Series([front, back, id, inline, model, is_card], index=index_names)
 
         # normal card parser
         if (r := question_re.search(line)) is not None:
@@ -189,9 +187,7 @@ def parse_card(lines: list, return_empty=False) -> pd.Series:
             id = int(r.group("id"))
         elif empty_line_re.search(line) is not None:
             if front is not None and back is not None:
-                return pd.Series(
-                    [front, back, id, inline, model, is_card], index=index_names
-                )
+                return pd.Series([front, back, id, inline, model, is_card], index=index_names)
 
     return pd.Series([front, back, id, inline, model, is_card], index=index_names)
 
@@ -235,9 +231,7 @@ def card_gen(lines, deck=None, tags=None):
             else:
                 card_dict["Back"] += line.strip(">")
         elif (r := id_re.search(line)) is not None:
-            card_dict["id"] = [int(group) for group in r.groups() if group is not None][
-                0
-            ]
+            card_dict["id"] = [int(group) for group in r.groups() if group is not None][0]
         elif empty_line_re.search(line) is not None:
             if card_dict["Front"] is not None and card_dict["Back"] is not None:
                 card_dict["Back"] = card_dict["Back"].replace("\n", "<br />")
@@ -255,17 +249,13 @@ def insert_card_id(series: pd.Series) -> list[str]:
     """Function to insert or modify the card id in the text lines of the dataframe entry."""
 
     # precompile id regex
-    id_re = re.compile(precompiled["id"])
+    endline_id_re = re.compile(precompiled["id"] + r"\n$")
 
     # create sub line
     if np.isnan(series.id):
         sub = ""
     else:
-        sub = f"^{series.id}"
-
-    # if the card is inline, adjust the sub so that subbing the id with the empty str doesn't ruin line ordering
-    if series.inline is True:
-        sub = sub + "\n"
+        sub = f"^{series.id}\n"
 
     # deepcopy text list to avoid modifying the original by mistake
     lines = copy.deepcopy(series.text)
@@ -275,14 +265,14 @@ def insert_card_id(series: pd.Series) -> list[str]:
 
     # three cases:
     # - the regex returns a match in the text -> sub the match with the new id
-    # - no match and the card is an inline type -> sub \n in line with id + \n
+    # - no match and the card is an inline type -> sub \n in line with id
     # - no match and no inline -> append new line with id
-    if id_re.search(line):
-        line = id_re.sub(f"{sub}", line)
+    if endline_id_re.search(line):
+        line = endline_id_re.sub(f"{sub}", line)
     elif series.inline is True:
         line = re.sub("\n", f"{sub}", line)
     else:
-        line = line + f"{sub}\n"
+        line = line + f"{sub}"
 
     # put the modified line in its original place
     lines.append(line)
